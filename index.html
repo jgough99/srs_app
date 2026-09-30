@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Word Quiz (SRS)</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f5;--ink:#1c2433;--mute:#6b7688;--card:#fff;--line:#d5dbe4;--ok:#1f9d55;--okbg:#d8f3e3;--bad:#d64545;--badbg:#fadcdc;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141a26;--ink:#e8ecf3;--mute:#8f9bb0;--card:#1e2635;--line:#333e52;--okbg:#17472e;--badbg:#5a2424}}
+:root[data-theme="dark"]{--bg:#141a26;--ink:#e8ecf3;--mute:#8f9bb0;--card:#1e2635;--line:#333e52;--okbg:#17472e;--badbg:#5a2424}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;min-height:100vh}
+main{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+.scores{display:flex;gap:10px}
+.score{flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 10px;display:flex;justify-content:space-between;align-items:baseline}
+.score{font-size:13px}
+.score b{font-size:16px}
+.score.c b{color:var(--ok)}.score.w b{color:var(--bad)}
+.word{font-family:"Noto Serif JP","Hiragino Mincho ProN","Yu Mincho",serif;font-weight:600;font-size:clamp(72px,26vw,140px);text-align:center;margin:8px 0 4px;line-height:1.15;word-break:break-all;color:#fff}
+.word.rtk{color:#ff9f43}
+.stats{color:var(--mute);font-size:13px;text-align:center;margin-top:6px}
+#blist{max-height:60vh;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+#blist:empty{display:none}
+.br{padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink)}
+.br .w{font-family:"Noto Serif JP",serif;font-size:20px;margin-right:8px}
+.br.k .w{color:#e07b00}
+.br small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+.stage{background:#1b2231;border-radius:14px;margin:8px 0 10px;padding:28px 8px 10px}
+select{font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
+.reading{height:28px;text-align:center;color:#aab4c5;font-size:20px;font-family:"Noto Serif JP",serif;margin-bottom:6px}
+.opts{display:grid;gap:10px}
+.opt{font:inherit;font-size:17px;text-align:left;padding:14px 16px;background:var(--card);color:var(--ink);border:2px solid var(--line);border-radius:10px;cursor:pointer}
+.opt:focus-visible,button:focus-visible{outline:3px solid var(--mute);outline-offset:2px}
+.opt.ok{background:var(--okbg);border-color:var(--ok)}
+.opt.bad{background:var(--badbg);border-color:var(--bad)}
+.opt:disabled{cursor:default;color:var(--ink)}
+details{margin-top:32px;font-size:14px;color:var(--mute)}
+summary{cursor:pointer}
+.imp{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.imp input[type=number]{width:52px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
+button.s{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+</style>
+</head>
+<body>
+<main>
+  <div class="scores">
+    <div class="score c"><span>Correct today</span><b id="c">0</b></div>
+    <div class="score w"><span>Incorrect today</span><b id="w">0</b></div>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="stage">
+    <div class="word" id="word" lang="ja"></div>
+    <div class="reading" id="reading" lang="ja"></div>
+    <div id="ivl" style="text-align:center;color:#8f9bb0;font-size:13px;height:18px"></div>
+  </div>
+  <div style="text-align:center;margin-bottom:14px"><button class="s" id="replay">🔊 Play reading</button><span id="rtklabel" style="display:none;color:#ff9f43;font-weight:600;padding:7px 12px;border:1px solid transparent">RTK</span></div>
+  <div class="opts" id="opts"></div>
+  <p id="voicenote" style="color:var(--bad);font-size:14px"></p>
+
+  <details>
+    <summary>Options</summary>
+    <div class="imp">New cards per day <input type="number" id="lim" value="20" min="1" max="500"></div>
+    <p>Export Kaishi 1.5k from Anki as a text file (tab-separated), then choose it here. Set the column numbers for the word, reading and meaning.</p>
+    <div class="imp">
+      Word <input type="number" id="cw" value="1" min="1">
+      Reading <input type="number" id="cr" value="2" min="1">
+      Meaning <input type="number" id="cm" value="3" min="1">
+      <input type="file" id="file" accept=".txt,.tsv,.csv,text/plain">
+    </div>
+    <p id="deckinfo"></p>
+    <div class="imp"><button class="s" id="wipe">Reset SRS progress</button></div>
+    <div class="imp"><button class="s" id="exp">Export progress</button> <input type="file" id="imp" accept=".json,application/json"></div>
+    <p id="impinfo"></p>
+    <p id="hastatus"></p>
+    <div class="imp">Browse cards
+      <select id="bd"><option value="w">Words</option><option value="k">RTK</option></select>
+      <select id="bf"><option value="all">All</option><option value="new">New</option><option value="seen">Seen</option><option value="due">Due</option><option value="lapsed">Has lapses</option></select>
+      <button class="s" id="bgo">Show</button>
+    </div>
+    <p id="bcount"></p>
+    <div id="blist"></div>
+    <div class="imp">Mix
+      <select id="mode"><option value="mix">Words + RTK</option><option value="words">Words only</option><option value="rtk">RTK only</option></select>
+    </div>
+    <p>RTK kanji: export your deck from Reviewing the Kanji as a CSV or text file, set the column numbers, then choose it.</p>
+    <div class="imp">
+      Kanji <input type="number" id="ck" value="1" min="1">
+      Keyword <input type="number" id="ckw" value="2" min="1">
+      <input type="file" id="rfile" accept=".txt,.tsv,.csv,text/plain">
+    </div>
+    <p id="rtkinfo"></p>
+    <button class="s" id="reset">Reset scores</button>
+  </details>
+</main>
+<script>
+var DEFAULT=[["私","わたし","I (polite, general)"],["あなた","あなた","you (usually when one doesn't know the person)"],["さん","さん","san"],["彼","かれ","he, him"],["好き","すき","like, fond of"],["人","ひと","person"],["いい","いい","good"],["人","じん","person from (nationality)","人|じん"],["日本語","にほんご","Japanese language"],["勉強","べんきょう","study"],["本","ほん","book"],["これ","これ","this"],["何","なに・なん","what"],["それ","それ","that"],["あれ","あれ","that over there"],["どれ","どれ","which, what"],["毎日","まいにち","every day"],["兄","あに","older brother"],["いる","いる","have, exist (animate)"],["ある","ある","have, exist (inanimate)"],["あまり","あまり","(not) very, (not) much"],["今","いま","now"],["時間","じかん","time, hour"],["無い","ない","to not be"],["この","この","this one"],["その","その","that one"],["あの","あの","that one there"],["どの","どの","which one"],["見る","みる","see, look at"],["全然","ぜんぜん","(not) at all"],["面白い","おもしろい","interesting, amusing"],["する","する","do, make"],["なる","なる","become, result in, come (to do)"],["先生","せんせい","teacher"],["ください","ください","please give..., please do..."],["名前","なまえ","name"],["教える","おしえる","teach, tell"],["ここ","ここ","here"],["そこ","そこ","there"],["あそこ","あそこ","over there"],["どこ","どこ","where"],["置く","おく","put, place"],["家","いえ","house, home"],["帰る","かえる","return, go back"],["話","はなし","talk, story"],["知る","しる","know"],["彼女","かのじょ","she, her, girlfriend"],["ちゃん","ちゃん","chan"],["はい","はい","yes (polite)"],["いいえ","いいえ","no (polite)"],["日本","にほん","Japan"],["学校","がっこう","school"],["行く","いく","go"],["明日","あした","tomorrow"],["来る","くる","come"],["また","また","again, also"],["いつ","いつ","when"],["思う","おもう","think"],["こう","こう","like this, this kind of"],["そう","そう","in such manner, that way"],["どう","どう","how, what"],["会う","あう","meet"],["次","つぎ","next, subsequent"],["方","ほう","direction, side"],["方","かた","person (polite form)","方|かた"],["聞く","きく","hear"],["聞く","きく","ask","聞く|きく"],["お願いします","おねがいします","please"],["分かる","わかる","understand"],["よく","よく","well"],["よく","よく","often","よく|よく"],["考える","かんがえる","think, consider"],["ありがとうございます","ありがとうございます","thank you (formal)"],["話す","はなす","talk, speak"],["もっと","もっと","more, a bit more"],["ゆっくり","ゆっくり","slowly"],["言う","いう","say"],["友達","ともだち","friend, companion"],["待つ","まつ","wait"],["昨日","きのう","yesterday"],["町","まち","town, city"],["高い","たかい","expensive"],["高い","たかい","high, tall","高い|たかい"],["一番","いちばん","(the) most"],["ちょっと","ちょっと","a little"],["もう","もう","already, yet"],["もう","もう","another, again","もう|もう"],["父","ちち","(speaker's) father"],["大好き","だいすき","love"],["母","はは","(speaker's) mother"],["あげる","あげる","give (receiver is not in the speaker's group)"],["くれる","くれる","give (receiver is in the speaker's group)"],["もらう","もらう","receive"],["物","もの","thing, object"],["君","きみ","you (to someone of equal or lower status)"],["中","なか","inside, middle"],["出来る","できる","can do, be good at"],["本当","ほんとう","truth, reality"],["立つ","たつ","stand, rise"],["前","まえ","front, before"],["入る","はいる","enter"],["家族","かぞく","family"],["住む","すむ","live, reside"],["大きな","おおきな","big, large"],["大きい","おおきい","big, large"],["声","こえ","voice, sound"],["目","め","eye"],["手","て","hand"],["上げる","あげる","raise, increase"],["嫌い","きらい","dislike"],["おじいさん","おじいさん","grandfather"],["おばあさん","おばあさん","grandmother"],["元気","げんき","energetic, healthy"],["いつも","いつも","always, usually"],["持つ","もつ","have, hold"],["みんな","みんな","all, everybody"],["使う","つかう","use"],["大丈夫","だいじょうぶ","alright, OK"],["始める","はじめる","start"],["今日","きょう","today"],["部屋","へや","room"],["悪い","わるい","bad"],["まあ","まあ","well..."],["食べる","たべる","eat"],["沢山","たくさん","a lot, plenty"],["場所","ばしょ","place, location"],["呼ぶ","よぶ","call, name"],["動く","うごく","move"],["気持ち","きもち","feeling, sensation"],["誰","だれ","who"],["子","こ","child, kid"],["どんな","どんな","what kind of..."],["意味","いみ","meaning, significance"],["言葉","ことば","word, language"],["心配","しんぱい","worry"],["様子","ようす","appearance, state"],["信じる","しんじる","to believe, to trust"],["自分","じぶん","self, oneself"],["調べる","しらべる","look up, search"],["事","こと","thing, incident"],["同じ","おなじ","same, identical"],["申し訳ない","もうしわけない","sorry, inexcusable"],["もちろん","もちろん","of course, no doubt"],["とても","とても","very"],["楽しい","たのしい","fun, enjoyable"],["失礼します","しつれいします","pardon me, excuse me (e.g. when leaving)"],["手伝う","てつだう","to help"],["忙しい","いそがしい","busy, occupied"],["仕事","しごと","work, job"],["続ける","つづける","to continue, to keep up"],["見せる","みせる","to show"],["うち","うち","one's household"],["約束","やくそく","promise, appointment"],["忘れる","わすれる","to forget"],["守る","まもる","to protect, to observe"],["変える","かえる","to change, to alter"],["さっき","さっき","(only) a moment ago"],["今度","こんど","next time"],["これから","これから","from now on, after this"],["止める","とめる","to stop (at some place)"],["止める","やめる","to stop (doing something)","止める|やめる"],["頼む","たのむ","to ask, to request"],["許す","ゆるす","to forgive, to permit"],["嬉しい","うれしい","happy, glad"],["頑張る","がんばる","to persevere, to do one's best"],["なるほど","なるほど","I see, really"],["つまり","つまり","in short, basically"],["国","くに","country"],["優しい","やさしい","gentle, kind"],["嫌","いや","disliking, unwilling (to do)"],["そんなに","そんなに","that much"],["今回","こんかい","this time"],["夜","よる","evening, night"],["買う","かう","to buy"],["今まで","いままで","until now"],["奴","やつ","that guy, (s)he (usu. derogatory)"],["あいつ","あいつ","that guy"],["もし","もし","if, in the event of..."],["理解","りかい","understanding, comprehension"],["夢","ゆめ","dream"],["俺","おれ","I (male)"],["難しい","むずかしい","difficult"],["今度","こんど","this time","今度|こんど"],["おかしい","おかしい","strange, suspicious"],["男の子","おとこのこ","boy"],["女の子","おんなのこ","girl"],["寝る","ねる","sleep"],["伝える","つたえる","to convey, to transmit"],["小さい","ちいさい","small"],["選ぶ","えらぶ","to choose, to elect"],["座る","すわる","to sit"],["簡単","かんたん","simple, easy"],["お願い","おねがい","favor"],["進む","すすむ","to move forward"],["全く","まったく","entirely, truly"],["なぜ","なぜ","why"],["僕","ぼく","I (male)"],["水","みず","water"],["飲む","のむ","drink"],["暇","ひま","free, not busy"],["時","とき","time, occasion"],["時","じ","hour, o'clock","時|じ"],["一","いち","one"],["二","に","two"],["三","さん","three"],["四","よん・し","four"],["五","ご","five"],["六","ろく","six"],["七","なな・しち","seven"],["八","はち","eight"],["九","きゅう","nine"],["十","じゅう","ten"],["くん","くん","kun (usu. used with men younger or of the same age)"],["すみません","すみません","sorry, excuse me"],["やる","やる","to do"],["顔","かお","face"],["今朝","けさ","this morning"],["出る","でる","to go out, to leave"],["そして","そして","and, and then"],["まだ","まだ","yet, more"],["じゃ","じゃ","then, well"],["ため","ため","sake, purpose"],["ご飯","ごはん","cooked rice, meal"],["ところ","ところ","place"],["少し","すこし","a bit, a little while"],["見える","みえる","be visible"],["違う","ちがう","to differ, to be wrong"],["男","おとこ","man, male"],["ただ","ただ","free"],["ただ","ただ","simply","ただ|ただ"],["人間","にんげん","human being, people"],["作る","つくる","to make, to create"],["感じる","かんじる","to feel, to sense"],["上","うえ","up, above"],["強い","つよい","strong"],["出す","だす","to take out"],["笑う","わらう","laugh, smile"],["毎月","まいつき","every month"],["毎年","まいとし","every year"],["多く","おおく","many, much"],["くらい","くらい","approximately, about"],["姉","あね","older sister"],["弟","おとうと","younger brother"],["妹","いもうと","younger sister"],["力","ちから","strength, power"],["世界","せかい","world"],["相手","あいて","partner, opponent"],["姿","すがた","figure, appearance"],["死ぬ","しぬ","to die"],["早い","はやい","early"],["早い","はやい","fast (in terms of time)","早い|はやい"],["頭","あたま","head"],["戻る","もどる","to return, to go back"],["ずっと","ずっと","continuously, the whole time"],["どうして","どうして","why"],["やっぱり","やっぱり","just as I thought, after all"],["つもり","つもり","intention, purpose"],["必要","ひつよう","necessary, needed"],["終わる","おわる","to finish, to end"],["者","もの","person"],["後","あと","after"],["こちら","こちら","here, this way"],["向かう","むかう","to face, to head toward"],["きっと","きっと","surely, certainly"],["変わる","かわる","to change"],["凄い","すごい","wonderful, great, a lot"],["女","おんな","woman, girl"],["ちゃんと","ちゃんと","properly"],["音","おと","sound"],["体","からだ","body"],["掛ける","かける","to hang, to put on"],["歩く","あるく","to walk, to go on foot"],["存在","そんざい","existence, being"],["過ぎる","すぎる","to exceed, to pass by"],["聞こえる","きこえる","can hear"],["受ける","うける","to receive, to accept"],["今年","ことし","this year"],["去年","きょねん","last year"],["来年","らいねん","next year"],["殺す","ころす","to kill"],["まさか","まさか","by no means, never!"],["絶対","ぜったい","absolutely"],["理由","りゆう","reason, cause"],["口","くち","mouth"],["外","そと","outside"],["逃げる","にげる","to escape, to run away"],["誰か","だれか","someone"],["まるで","まるで","just like, completely"],["他","ほか","another, somewhere else"],["他","た","other (esp. people and abstract matters)","他|た"],["問題","もんだい","problem, question"],["今後","こんご","after this, in the future"],["普通","ふつう","normal, regular, average"],["心","こころ","heart, mind"],["春","はる","spring"],["夏","なつ","summer"],["秋","あき","fall"],["冬","ふゆ","winter"],["以上","いじょう","... or more, beyond"],["それで","それで","then, so"],["生きる","いきる","to live, to exist"],["最初","さいしょ","first, beginning"],["最後","さいご","last, final"],["日","ひ","day"],["間","あいだ","interval (of time, space, etc.)"],["間","ま","interval, duration of time, pause","間|ま"],["について","について","concerning, regarding"],["左","ひだり","left"],["右","みぎ","right"],["感じ","かんじ","feeling, impression"],["胸","むね","chest"],["表情","ひょうじょう","expression, look"],["多い","おおい","a lot"],["初めて","はじめて","for the first time"],["無理","むり","unreasonable, impossible"],["欲しい","ほしい","wanting, wishing for"],["ごめん","ごめん","sorry"],["覚える","おぼえる","to memorize"],["別に","べつに","(not) particularly"],["思い出す","おもいだす","to recollect, to recall"],["入れる","いれる","to put in"],["開く","あく","to open"],["開く","ひらく","to open","開く|ひらく"],["残る","のこる","to remain, to be left over"],["答える","こたえる","to answer"],["怖い","こわい","fearful, be afraid, fearsome"],["年","ねん","counter for years"],["年","とし","year","年|とし"],["取る","とる","to take, to get"],["全て","すべて","all, entirely"],["助ける","たすける","to help, to save"],["状況","じょうきょう","state of affairs, conditions"],["確認","かくにん","confirmation"],["消える","きえる","to turn off, to disappear"],["長い","ながい","long"],["驚く","おどろく","to be surprised, to be astonished"],["腕","うで","arm"],["以外","いがい","except for"],["困る","こまる","to be at a loss, to be in trouble"],["離れる","はなれる","to be separated, to be apart"],["気","き","spirit, temperament"],["書く","かく","to write"],["光","ひかり","light, flash"],["走る","はしる","to run"],["戦う","たたかう","to wage war, to fight"],["余り","あまり","remainder, leftover"],["全部","ぜんぶ","all, everything"],["瞬間","しゅんかん","instant, moment"],["説明","せつめい","explanation"],["決める","きめる","to decide"],["女性","じょせい","woman, female"],["頂く","いただく","to receive, to take (humble form)"],["敵","てき","enemy"],["起きる","おきる","to occur"],["起きる","おきる","to get up, to get out of bed","起きる|おきる"],["落ちる","おちる","to fall"],["足","あし","leg, foot"],["それに","それに","in addition"],["先に","さきに","before, ahead"],["魔法","まほう","magic"],["探す","さがす","to look for, to search"],["子供","こども","child, kid"],["怒る","おこる","to get angry, to scold"],["笑顔","えがお","smile"],["先輩","せんぱい","senior (at work, school, etc.)"],["続く","つづく","to continue, to keep up"],["こんなに","こんなに","this much, such"],["変","へん","strange, funny"],["読む","よむ","to read"],["当然","とうぜん","natural, as a matter of course"],["情報","じょうほう","information"],["見つける","みつける","to find"],["少女","しょうじょ","girl"],["大変","たいへん","terrible, serious, grave"],["かなり","かなり","fairly, rather"],["下","した","under, below"],["下","もと","under (the supervision of)","下|もと"],["かかる","かかる","to take (e.g. time or money)"],["掛かる","かかる","to hang, to be hung"],["一度","いちど","once"],["完全","かんぜん","perfect, complete"],["後ろ","うしろ","back, behind"],["泣く","なく","to cry"],["状態","じょうたい","state, condition"],["関係","かんけい","relation(ship)"],["向ける","むける","to turn toward, to point at"],["奥","おく","inner part, back (of...)"],["軽い","かるい","light"],["返す","かえす","to return, to repay"],["現れる","あらわれる","to appear, to emerge"],["痛い","いたい","hurt, ouch"],["どうやら","どうやら","(seems) likely, seems like"],["点ける","つける","to switch on"],["付ける","つける","to attach, to set, to add"],["一瞬","いっしゅん","instant, for a moment"],["隠す","かくす","to hide"],["準備","じゅんび","preparation, arrangements"],["そろそろ","そろそろ","soon, about time"],["落ち着く","おちつく","to calm down, to settle in"],["恥ずかしい","はずかしい","embarrassing, shy"],["場合","ばあい","situation, case"],["しっかり","しっかり","tightly, firmly"],["しっかり","しっかり","mature, responsible","しっかり|しっかり"],["髪","かみ","hair(style)"],["元","もと","former, ex-"],["得る","える","to obtain, to gain"],["すぐ","すぐ","at once, right away"],["来月","らいげつ","next month"],["昔","むかし","a long time ago, the old days"],["近い","ちかい","near"],["動き","うごき","movement, motion"],["見つめる","みつめる","to stare"],["幸せ","しあわせ","happiness, good fortune"],["記憶","きおく","memory"],["反応","はんのう","reaction, response"],["私たち","わたしたち","we"],["とにかく","とにかく","in any case, anyway"],["勝手","かって","selfish, self-centered"],["攻撃","こうげき","attack, assault, criticism"],["開ける","あける","to open, to unlock"],["黙る","だまる","to become silent, to shut one's mouth"],["最近","さいきん","recently"],["全員","ぜんいん","all members, (the) entire staff"],["せい","せい","cause, fault"],["深い","ふかい","deep, profound"],["別","べつ","another, different"],["決まる","きまる","to be decided, to be set"],["しばらく","しばらく","for a while, for the time being"],["行う","おこなう","to perform, to do"],["上がる","あがる","to go up, to rise"],["隣","となり","next to, adjacent"],["扉","とびら","door"],["指","ゆび","finger, toe"],["結果","けっか","result, outcome"],["与える","あたえる","to give"],["道","みち","road"],["乗る","のる","to ride, to take"],["特に","とくに","specially, particularly"],["形","かたち","shape"],["さあ","さあ","I'm not sure, Hmm..."],["血","ち","blood"],["更に","さらに","furthermore, even more"],["用意","ようい","preparation, getting ready"],["負ける","まける","to lose"],["神","かみ","god, spirit"],["実は","じつは","actually, the truth is"],["服","ふく","clothes"],["不思議","ふしぎ","strange, wonderful"],["意識","いしき","consciousness, awareness"],["一体","いったい","what on earth, what the…"],["とりあえず","とりあえず","for now, first of all"],["送る","おくる","to send"],["では","では","then"],["安心","あんしん","peace of mind, relief"],["失う","うしなう","to lose, to miss"],["行動","こうどう","action, conduct"],["触れる","ふれる","to touch, to come in contact with"],["そもそも","そもそも","in the first place"],["少ない","すくない","few, little"],["結局","けっきょく","after all, finally"],["空","そら","sky, weather"],["済む","すむ","to be settled, to complete"],["任せる","まかせる","to entrust to, to leave it to"],["赤い","あかい","red"],["大事","だいじ","important, precious"],["残す","のこす","to leave, to reserve"],["止まる","とまる","to stop, to come to a stop"],["朝","あさ","morning"],["命","いのち","life"],["不安","ふあん","uneasiness, anxiety"],["結構","けっこう","all right, no thank you"],["結構","けっこう","quite","結構|けっこう"],["新しい","あたらしい","new"],["程度","ていど","degree, extent"],["壁","かべ","wall, partition"],["用","よう","things to do, (as a suffix) to do..., made for..."],["背中","せなか","back"],["気付く","きづく","to realize, to notice"],["いきなり","いきなり","all of a sudden, without warning"],["渡す","わたす","to carry across, to hand over"],["喜ぶ","よろこぶ","to be happy, to be delighted"],["可愛い","かわいい","cute"],["始まる","はじまる","to begin"],["色","いろ","color"],["認める","みとめる","to recognize, to approve, to accept"],["急","きゅう","suddenly"],["向こう","むこう","the other side, the other party, opponent"],["求める","もとめる","to seek, to wish for"],["肩","かた","shoulder"],["仲間","なかま","comrade, peer"],["ようやく","ようやく","at last"],["思わず","おもわず","unintentionally, involuntarily"],["ほとんど","ほとんど","almost, hardly"],["突然","とつぜん","abruptly, suddenly"],["自身","じしん","self"],["再び","ふたたび","again, a second time"],["静か","しずか","quiet"],["飛ぶ","とぶ","to fly"],["白い","しろい","white, blank"],["届く","とどく","to reach, to be received"],["生む","うむ","to have children"],["倒す","たおす","to bring down, to overthrow"],["似る","にる","to look similar to, to resemble"],["空気","くうき","atmosphere, air"],["腰","こし","hip, lower back"],["名","な","name, reputation"],["危険","きけん","danger, dangerous"],["付く","つく","to attach itself to, to be connected with, to come in contact with"],["つく","つく","to be on, to be switched on"],["熱い","あつい","hot (things, touch)"],["ただいま","ただいま","I'm back (said when arriving home)"],["頂きます","いただきます","let's eat!, thank you for the meal"],["慌てる","あわてる","to be flustered, to hurry"],["周囲","しゅうい","circumference, surroundings"],["気分","きぶん","mood, feeling"],["事実","じじつ","fact, truth"],["まず","まず","first (of all), to begin with"],["本気","ほんき","seriousness"],["頷く","うなずく","to nod"],["通り","とおり","street"],["想像","そうぞう","imagination"],["店","みせ","shop, store"],["何だか","なんだか","somehow, for some reason"],["目的","もくてき","purpose, aim, object"],["眠る","ねむる","to sleep"],["確か","たしか","certainly, surely, if I'm not mistaken..."],["十分","じゅうぶん","plenty"],["料理","りょうり","cooking, cuisine"],["頃","ころ","approximate time"],["なかなか","なかなか","rather, fairly"],["正直","しょうじき","honest, upright"],["身","み","body, one's own person"],["いっぱい","いっぱい","full, a lot"],["美しい","うつくしい","beautiful"],["甘い","あまい","sweet"],["むしろ","むしろ","rather"],["首","くび","neck"],["感情","かんじょう","feeling, emotion"],["周り","まわり","around, surroundings"],["方法","ほうほう","method, way"],["もう一度","もういちど","once more"],["遅い","おそい","slow, late"],["会話","かいわ","conversation"],["合う","あう","to fit"],["やって来る","やってくる","to come around, to come along"],["森","もり","thick woods, forest"],["動かす","うごかす","to move, to make a move"],["能力","のうりょく","ability, capacity"],["震える","ふるえる","to tremble, to shake"],["期待","きたい","expectation, anticipation"],["無事","ぶじ","safely, peacefully"],["起こす","おこす","to bring about, to cause"],["起こす","おこす","to wake up","起こす|おこす"],["耳","みみ","ear, hearing"],["生まれる","うまれる","to be born"],["移動","いどう","movement, shift"],["邪魔","じゃま","obstacle, hindrance"],["遊ぶ","あそぶ","to play"],["要る","いる","to need, to require"],["無くなる","なくなる","to be lost, to be used up"],["唇","くちびる","lip"],["着る","きる","to wear, to put on"],["色々","いろいろ","various, in various ways"],["どうぞ","どうぞ","go ahead"],["立ち上がる","たちあがる","to stand up"],["思い","おもい","thought"],["以前","いぜん","before, ago"],["もう少し","もうすこし","a little more, a bit more"],["襲う","おそう","to assault, to attack"],["見つかる","みつかる","to be found, to be caught"],["急ぐ","いそぐ","to hurry"],["せっかく","せっかく","with (much) trouble, specially"],["降りる","おりる","to get off, to go down"],["下りる","おりる","to go down, to come down"],["切る","きる","to cut"],["事件","じけん","affair, case"],["返事","へんじ","reply"],["酷い","ひどい","terrible, cruel"],["重い","おもい","heavy"],["起こる","おこる","to occur, to happen"],["逆","ぎゃく","reverse, inverse"],["納得","なっとく","consent, accept"],["楽しむ","たのしむ","to enjoy"],["叫ぶ","さけぶ","to shout, to yell, to cry out"],["集まる","あつまる","to gather, to be collected"],["構う","かまう","to mind, to care for"],["王","おう","king"],["途中","とちゅう","on the way, half way"],["慣れる","なれる","to grow accustomed to"],["終わり","おわり","end"],["一応","いちおう","for the time being, more or less"],["引く","ひく","to draw, to pull"],["海","うみ","sea, ocean"],["諦める","あきらめる","to give up, to abandon"],["必ず","かならず","without exception, always, certainly"],["狙う","ねらう","to aim, to be after"],["いくら","いくら","how much"],["落とす","おとす","to drop"],["部分","ぶぶん","part, section"],["必死","ひっし","frantic, desperate"],["珍しい","めずらしい","rare, uncommon"],["意外","いがい","unexpected, unforeseen"],["報告","ほうこく","report"],["握る","にぎる","to grasp, to grip"],["結婚","けっこん","marriage"],["戦い","たたかい","war, battle"],["感謝","かんしゃ","appreciation, thanks"],["激しい","はげしい","intense, violent"],["倒れる","たおれる","to collapse, to fall down"],["既に","すでに","already, too late"],["疲れる","つかれる","to get tired"],["生活","せいかつ","life, lifestyle"],["場","ば","opportunity, occasion"],["愛する","あいする","to love, to care for"],["冷たい","つめたい","cold (to the touch)"],["捨てる","すてる","to throw away"],["過ごす","すごす","to spend (time), to pass"],["食事","しょくじ","meal, dinner"],["働く","はたらく","to work"],["答え","こたえ","answer, response"],["風","かぜ","wind"],["黒い","くろい","black, dark"],["助かる","たすかる","to be saved, to survive"],["受け取る","うけとる","to receive, to take (someone's words or behavior)"],["足りる","たりる","to be enough, to be sufficient"],["判断","はんだん","judgment, decision"],["未来","みらい","future"],["食う","くう","to eat, to live on"],["分","ぶん","amount, share"],["そっち","そっち","there"],["上手い","うまい","skilled, good"],["合わせる","あわせる","to adjust, to match"],["大切","たいせつ","important, valuable"],["花","はな","flower"],["謝る","あやまる","to apologize"],["奪う","うばう","to snatch, to take by force"],["勢い","いきおい","vigor, momentum"],["涙","なみだ","tear"],["雰囲気","ふんいき","atmosphere, mood"],["嘘","うそ","lie"],["望む","のぞむ","to desire, to hope"],["緊張","きんちょう","tension, strain, be nervous"],["一緒","いっしょ","together"],["救う","すくう","to save"],["自ら","みずから","oneself"],["地面","じめん","surface, ground"],["失敗","しっぱい","failure, blunder"],["避ける","さける","to avoid, to evade"],["窓","まど","window"],["素直","すなお","honest, straightforward"],["肉","にく","flesh, meat"],["冗談","じょうだん","joke"],["余裕","よゆう","room, leeway"],["連絡","れんらく","connection, communication"],["人生","じんせい","(human) life"],["放つ","はなつ","to emit, to set free, to shoot (e.g. an arrow or bullet)"],["流れる","ながれる","to flow, to pass"],["特別","とくべつ","special, extraordinary"],["連中","れんちゅう","party, this bunch"],["両手","りょうて","both hands"],["増える","ふえる","to increase, to accrue"],["出会う","であう","to meet (by chance), to come across"],["少年","しょうねん","boy"],["繰り返す","くりかえす","to repeat"],["我慢","がまん","patience, bearing with"],["我々","われわれ","we (formal)"],["感覚","かんかく","sensation"],["響く","ひびく","to reverberate"],["何とか","なんとか","somehow, please"],["山","やま","mountain"],["当たり前","あたりまえ","of course, obvious"],["予定","よてい","schedule, plan"],["残念","ざんねん","regretful, disappointing"],["追う","おう","to chase, to pursue"],["綺麗","きれい","beautiful, clean"],["いらっしゃる","いらっしゃる","to be, to come, to go (honorific form)"],["若い","わかい","young"],["どうしても","どうしても","by any means, really"],["考え","かんがえ","thought, view"],["過去","かこ","the past"],["気配","けはい","indication, sign"],["本人","ほんにん","the person in question"],["現実","げんじつ","reality, actuality"],["決して","けっして","never, by no means"],["いつか","いつか","some time, some day"],["床","ゆか","floor"],["横","よこ","side, width across"],["休む","やすむ","to rest, to take time off"],["振り返る","ふりかえる","to turn one's head, to look back on"],["わざわざ","わざわざ","go out of one's way"],["質問","しつもん","question"],["興味","きょうみ","interest"],["距離","きょり","distance, interval"],["内容","ないよう","contents"],["つい","つい","inadvertently, carelessly"],["回る","まわる","to rotate, to go around"],["並ぶ","ならぶ","line up"],["終える","おえる","to end, to finish"],["態度","たいど","attitude, manner"],["金","かね","money"],["今夜","こんや","tonight, this evening"],["昨夜","ゆうべ","last night, last evening"],["さすが","さすが","just as expected, true to one's reputation"],["自然","しぜん","nature"],["眺める","ながめる","to look out, to gaze"],["向く","むく","to face, to look"],["相変わらず","あいかわらず","as usual, as before"],["普段","ふだん","usual, ordinary"],["どうも","どうも","for some reason, somehow"],["運ぶ","はこぶ","to carry"],["やっと","やっと","at last, finally"],["弱い","よわい","weak"],["どうせ","どうせ","anyway"],["離す","はなす","to separate, to detach"],["貴族","きぞく","noble"],["広がる","ひろがる","to spread out, to extend"],["頬","ほお","cheek"],["寂しい","さびしい","lonely, sad"],["正しい","ただしい","correct"],["自由","じゆう","freedom, free"],["全身","ぜんしん","the whole body"],["武器","ぶき","weapon, arms"],["それぞれ","それぞれ","each, respective"],["語る","かたる","to tell, to talk"],["持ってくる","もってくる","to bring"],["息子","むすこ","son"],["娘","むすめ","daughter"],["一気に","いっきに","in one go"],["そっと","そっと","softly, gently"],["伝わる","つたわる","to be transmitted, to be handed down"],["当たる","あたる","to hit, to strike"],["痛み","いたみ","pain, ache"],["妙","みょう","strange"],["影","かげ","shadow, shade"],["死","し","death"],["多分","たぶん","probably, perhaps"],["協力","きょうりょく","cooperation, collaboration"],["見上げる","みあげる","to look up"],["覚悟","かくご","readiness, resolution"],["連れる","つれる","to take along, to bring along"],["低い","ひくい","low, short (height)"],["木","き","tree"],["面倒","めんどう","annoying, troublesome"],["闇","やみ","darkness"],["広い","ひろい","wide, big"],["告げる","つげる","to tell, to notify"],["叩く","たたく","tap, hit"],["自信","じしん","self-confidence"],["集める","あつめる","to gather, to collect"],["振る","ふる","wave, shake"],["余計","よけい","excess, needless"],["他に","ほかに","else, in addition"],["誘う","さそう","to invite, to ask out"],["付き合う","つきあう","to socialize with, to see someone"],["村","むら","village"],["人物","じんぶつ","character, person"],["数","かず","number"],["危ない","あぶない","dangerous, uncertain"],["事情","じじょう","circumstances, conditions"],["本当に","ほんとうに","really, truly"],["噂","うわさ","gossip, rumor"],["断る","ことわる","to refuse, to turn down"],["どうか","どうか","if possible, somehow"],["巨大","きょだい","huge, gigantic"],["最高","さいこう","best, supreme"],["お金","おかね","money"],["傷","きず","wound, cut"],["怒り","いかり","anger, rage"],["どうやって","どうやって","how, in what way"],["効果","こうか","effect, result"],["取り出す","とりだす","to take out, to pull out"],["黒","くろ","black"],["愛","あい","love"],["直接","ちょくせつ","directly"],["浮かぶ","うかぶ","to float"],["抜ける","ぬける","to fall out, to leave"],["暗い","くらい","dark"],["息","いき","breath"],["駄目","だめ","no good"],["点","てん","point, mark"],["参加","さんか","participation"],["はっきり","はっきり","clearly"],["描く","かく","to draw"],["描く","えがく","to depict, to describe, to draw","描く|えがく"],["無視","むし","ignoring, disregarding"],["生徒","せいと","pupil, student"],["詳しい","くわしい","detailed"],["触る","さわる","to touch"],["これまで","これまで","until now, until here"],["半分","はんぶん","half"],["耐える","たえる","to withstand, to endure"],["立場","たちば","standpoint, position"],["石","いし","stone, small rock"],["挨拶","あいさつ","greeting"],["相談","そうだん","consultation, advice"],["受け入れる","うけいれる","to accept, to accommodate"],["練習","れんしゅう","practice, training"],["無駄","むだ","wasteful, useless"],["抱える","かかえる","to hold in one's arms"],["示す","しめす","to show, to indicate"],["成功","せいこう","success"],["抱く","だく","to hug, to hold in one's arms"],["味","あじ","taste, flavor"],["男性","だんせい","male, man"],["否定","ひてい","denial, negation"],["致す","いたす","do (humble form)"],["現在","げんざい","present time, now"],["輝く","かがやく","to glitter, to shine"],["熱","ねつ","fever"],["始め","はじめ","beginning, origin"],["厳しい","きびしい","strict"],["匂い","におい","smell, odor"],["席","せき","seat"],["売る","うる","to sell"],["暮らす","くらす","to live, to make a living"],["利用","りよう","usage, utilization"],["ふと","ふと","suddenly, unintentionally"],["経験","けいけん","experience"],["変化","へんか","change, variation"],["王子","おうじ","prince"],["満足","まんぞく","satisfaction"],["どんどん","どんどん","steadily"],["命令","めいれい","order, command"],["主","おも","main, chief"],["美味しい","おいしい","tasty"],["手紙","てがみ","letter"],["掴む","つかむ","to grip, to grab"],["他人","たにん","another person, stranger"],["格好","かっこう","shape, appearance"],["光景","こうけい","sight, spectacle"],["すっかり","すっかり","all, completely"],["どちら","どちら","which"],["親","おや","parent"],["時代","じだい","period, age"],["作戦","さくせん","tactic, strategy"],["もしかしたら","もしかしたら","possibly, perhaps"],["苦しい","くるしい","painful, difficult"],["明るい","あかるい","bright"],["原因","げんいん","cause, origin"],["廊下","ろうか","hallway"],["そいつ","そいつ","that person, that guy"],["先ほど","さきほど","some time ago"],["大人","おとな","adult"],["人々","ひとびと","people"],["撫でる","なでる","to pat, to stroke"],["立てる","たてる","to put up, to erect"],["たまに","たまに","occasionally, by chance"],["押す","おす","to push, to press down"],["平気","へいき","calm, all right"],["悲しい","かなしい","sad"],["隠れる","かくれる","to hide, to disappear"],["まだまだ","まだまだ","still, not there yet"],["皆さん","みなさん","everyone"],["戻す","もどす","to return"],["戦闘","せんとう","battle, fight"],["火","ひ","fire"],["炎","ほのお","flame, blaze"],["恐怖","きょうふ","fear"],["迷う","まよう","to be perplexed, to get lost"],["よろしい","よろしい","all right"],["機会","きかい","chance, opportunity, occasion"],["恐ろしい","おそろしい","terrible, frightening"],["借りる","かりる","to borrow"],["外す","はずす","to remove"],["地","ち","ground, place"],["速い","はやい","fast (in terms of speed)"],["短い","みじかい","short, brief"],["気に入る","きにいる","to like, to be pleased with"],["改めて","あらためて","once again"],["うるさい","うるさい","noisy, annoying"],["当てる","あてる","to hit, to guess"],["包む","つつむ","to wrap, to pack"],["位置","いち","position, place"],["打つ","うつ","to hit, to strike"],["目指す","めざす","to aim for"],["秘密","ひみつ","secret, privacy"],["屋敷","やしき","mansion"],["限界","げんかい","boundary, limit"],["勝負","しょうぶ","match, contest"],["星","ほし","star, planet"],["明らか","あきらか","clear, obvious"],["悩む","なやむ","to be troubled, to worry"],["集中","しゅうちゅう","concentration, convergence"],["間違う","まちがう","to be mistaken, to be incorrect"],["裏","うら","rear, reverse"],["薄い","うすい","weak, pale"],["願う","ねがう","to wish, to ask a favor, to pray"],["回復","かいふく","recovery"],["流す","ながす","to let flow, to set adrift"],["じっと","じっと","without moving, still"],["本物","ほんもの","real thing, genuine article"],["正に","まさに","exactly, surely, truly"],["取り戻す","とりもどす","to take back, to recover"],["何より","なにより","above all, most important"],["身体","しんたい","body"],["方向","ほうこう","direction, course"],["通る","とおる","to pass, to take, to go through"],["空間","くうかん","space, room"],["着く","つく","to arrive"],["可能","かのう","possible, potential"],["新た","あらた","new"],["随分","ずいぶん","extremely, considerably"],["尋ねる","たずねる","to inquire, to search for"],["椅子","いす","chair"],["城","しろ","castle"],["恐らく","おそらく","probably (usually negative), I'm afraid ..."],["お茶","おちゃ","tea (polite)"],["雨","あめ","rain"],["いやいや","いやいや","reluctantly"],["そのもの","そのもの","the very thing, the picture of"],["教室","きょうしつ","classroom"],["馬鹿","ばか","fool, nonsense"],["遠慮","えんりょ","reserve, refraining"],["まずい","まずい","problematic, troublesome"],["まずい","まずい","bad-tasting, bad","まずい|まずい"],["せめて","せめて","at least"],["迎える","むかえる","to welcome, to go out to meet, to invite"],["少なくとも","すくなくとも","at least"],["魂","たましい","soul, spirit"],["消す","けす","to turn off"],["調子","ちょうし","condition, state of health"],["お互い","おたがい","each other"],["似合う","にあう","to suit, to match well"],["猫","ねこ","cat"],["犬","いぬ","dog"],["お礼","おれい","gratitude"],["後悔","こうかい","regret"],["希望","きぼう","hope, wish"],["下がる","さがる","to come down, to hang down, to fall"],["訪れる","おとずれる","to visit, to call on"],["褒める","ほめる","to praise, to commend"],["性格","せいかく","character, personality"],["写真","しゃしん","photograph"],["薬","くすり","drug, remedy"],["友人","ゆうじん","friend"],["かつて","かつて","once, formerly"],["確実","かくじつ","certain, secure"],["もはや","もはや","already, no longer"],["去る","さる","to go away, to pass"],["一部","いちぶ","(one) part"],["遠く","とおく","far (away)"],["腹","はら","belly"],["階段","かいだん","stairs"],["適当","てきとう","suitable, appropriate"],["舌","した","tongue"],["予想","よそう","prospect, expectation"],["興奮","こうふん","excitement, agitation"],["関わる","かかわる","to involve, to concern"],["白","しろ","white"],["進める","すすめる","to advance, to promote"],["真剣","しんけん","serious, sincere"],["迫る","せまる","to press, to close in on"],["ほぼ","ほぼ","almost, nearly"],["ちょうど","ちょうど","just, as if"],["疑問","ぎもん","question, doubt"],["指示","しじ","instruction, indication"],["揺れる","ゆれる","to shake, to sway"],["相当","そうとう","correspondence, suitability"],["楽","らく","easy, comfortable"],["勘違い","かんちがい","misunderstanding"],["警戒","けいかい","vigilance, precaution"],["確かめる","たしかめる","to check, to make sure of"],["月","つき","moon"],["疑う","うたがう","to doubt, to be suspicious"],["電話","でんわ","telephone"],["成長","せいちょう","growth"],["鋭い","するどい","acute, sharp"],["証拠","しょうこ","proof, evidence"],["紹介","しょうかい","introduction, referral"],["実際","じっさい","reality, actuality"],["何でも","なんでも","anything, whatever"],["作業","さぎょう","work, operation"],["重要","じゅうよう","important, essential"],["鍵","かぎ","key"],["衝撃","しょうげき","impact, shock"],["巻き込む","まきこむ","to roll up, to involve"],["差し出す","さしだす","to submit"],["軍","ぐん","army, troops"],["そちら","そちら","there, that way"],["悔しい","くやしい","vexing, frustrating"],["抜く","ぬく","to pull out"],["破壊","はかい","breaking, destruction"],["運命","うんめい","fate, fortune"],["案内","あんない","guide, show around"],["努力","どりょく","endeavor, effort"],["いずれ","いずれ","eventually, sometime"],["一言","ひとこと","single word, a few words"],["ついに","ついに","at last, finally"],["心臓","しんぞう","heart"],["荷物","にもつ","baggage, load"],["伸びる","のびる","to stretch, to grow"],["両親","りょうしん","(both) parents"],["量","りょう","amount, portion"],["払う","はらう","to pay"],["二度と","にどと","never again"],["辺り","あたり","vicinity, around"],["開始","かいし","beginning"],["解放","かいほう","release, setting free"],["仲良く","なかよく","harmoniously, amicably"],["獣","けもの","beast, brute"],["取れる","とれる","to come off, to be removed"],["建物","たてもの","building, structure"],["本来","ほんらい","originally, essentially"],["扱う","あつかう","to handle, to deal with"],["真面目","まじめ","serious, earnest"],["影響","えいきょう","influence, effect"],["真っ赤","まっか","deep red"],["発見","はっけん","discovery, revelation"],["支える","ささえる","to support, to maintain"],["第一","だいいち","number one, first"],["お父さん","おとうさん","father"],["お母さん","おかあさん","mother"],["お兄さん","おにいさん","older brother"],["お姉さん","おねえさん","older sister"],["おじさん","おじさん","uncle"],["おばさん","おばさん","aunt"],["いとこ","いとこ","cousin"],["机","つくえ","desk, table"],["同士","どうし","of the same kind, each other, fellow"],["遅れる","おくれる","to be late"],["車","くるま","car, automobile"],["飛び出す","とびだす","to fly out, to dash out"],["事態","じたい","situation, state of affairs"],["味方","みかた","friend, ally"],["展開","てんかい","unfolding, development"],["学園","がくえん","educational institution, school"],["怪しい","あやしい","suspicious, dubious"],["型","かた","type, model"],["流れ","ながれ","flow, stream"],["残り","のこり","rest, leftover"],["偶然","ぐうぜん","chance, accident"],["柔らかい","やわらかい","soft"],["感触","かんしょく","feeling, touch"],["女子","じょし","woman, girl"],["無し","なし","naught, nothing"],["壊れる","こわれる","to break, to fall apart"],["苦手","にがて","hard to deal with, weak point"],["試す","ためす","to try, to test"],["立派","りっぱ","fine, excellent"],["回す","まわす","to turn, to rotate"],["なぜか","なぜか","for some reason"],["意見","いけん","opinion"],["大量","たいりょう","large quantity, great volume"],["提案","ていあん","proposal, proposition"],["責任","せきにん","responsibility, liability"],["抑える","おさえる","to hold back, to restrain"],["全力","ぜんりょく","with all of one's strength, at full capacity"],["伸ばす","のばす","to stretch, to straighten"],["客","きゃく","customer, guest"],["王国","おうこく","kingdom, monarchy"],["抵抗","ていこう","resistance, opposition"],["混乱","こんらん","disorder, chaos"],["条件","じょうけん","condition, item"],["迷惑","めいわく","trouble, annoyance"],["例","れい","example"],["頼る","たよる","to rely on, to depend on"],["完璧","かんぺき","flawless, perfect"],["日々","ひび","daily, every day"],["行為","こうい","act, conduct"],["ともかく","ともかく","at least, at any rate"],["減る","へる","to decrease, to diminish"],["嫌う","きらう","to dislike, to hate"],["知り合い","しりあい","acquaintance"],["思考","しこう","thinking, thought"],["解決","かいけつ","solution, settlement"],["冷静","れいせい","cool, calm"],["天","てん","sky, Heaven"],["いつの間にか","いつのまにか","before one knows, unnoticed"],["直す","なおす","to repair, to cure, to alter"],["常に","つねに","always, constantly"],["犯人","はんにん","criminal, culprit"],["許可","きょか","permission, approval"],["閉じる","とじる","to close"],["重ねる","かさねる","to put on top of something, to pile up"],["細い","ほそい","thin, narrow, slender"],["久しぶり","ひさしぶり","for the first time in a while"],["目立つ","めだつ","to stand out, to be conspicuous"],["到着","とうちゃく","arrival"],["押さえる","おさえる","to hold down, to hold steady"],["通う","かよう","to go to and from, to frequent a place"],["殴る","なぐる","to hit, to strike"],["広げる","ひろげる","to spread, to unfold"],["引っ張る","ひっぱる","to pull, to drag"],["いつまでも","いつまでも","endlessly, as long as one likes"],["間に合う","まにあう","to be in time, to answer the purpose, can do without"],["了解","りょうかい","consent, understanding, roger that"],["番","ばん","one's turn"],["戦争","せんそう","war, battle"],["寒い","さむい","cold (temperature)"],["見事","みごと","splendid, admirable"],["酒","さけ","alcoholic drink, Japanese rice wine"],["恋人","こいびと","lover, sweetheart"],["一切","いっさい","not at all, absolutely nothing"],["穴","あな","hole, cavity"],["依頼","いらい","request, commission"],["中身","なかみ","content, interior"],["多少","たしょう","a little, somewhat"],["真実","しんじつ","truth, reality"],["見た目","みため","outward appearance"],["間違い","まちがい","mistake, error"],["青い","あおい","blue"],["辛い","からい","spicy"],["辛い","つらい","difficult, harsh","辛い|つらい"],["対応","たいおう","correspondence, equivalence, response"],["光る","ひかる","to shine, to emit light"],["苦労","くろう","difficulty, hardship"],["通じる","つうじる","to pass, to communicate with"],["罪","つみ","crime, sin"],["授業","じゅぎょう","class, lesson"],["最悪","さいあく","worst, terrible"],["差","さ","difference"],["信用","しんよう","trust, credit"],["壊す","こわす","to break, to destroy, to smash"],["式","しき","ceremony"],["人形","にんぎょう","doll"],["結ぶ","むすぶ","to tie, to join"],["あんなに","あんなに","that much, such..."],["計画","けいかく","plan, project"],["囲む","かこむ","to enclose, to encircle"],["知識","ちしき","knowledge"],["切り","きり","end, place to stop"],["注意","ちゅうい","care, watch out"],["言い方","いいかた","way of speaking, expression"],["経つ","たつ","to pass, to elapse"],["背","せ","height, stature"],["問う","とう","to ask, to inquire"],["恋","こい","love, romance"],["とんでもない","とんでもない","unthinkable, outrageous"],["中心","ちゅうしん","center, middle"],["汗","あせ","sweat"],["異常","いじょう","extraordinary, exceptional"],["非常","ひじょう","emergency, calamity"],["膝","ひざ","knee"],["わずか","わずか","few, little"],["役","やく","role, part"],["焦る","あせる","to feel pressured, to feel hurried"],["川","かわ","river, stream"],["悪魔","あくま","demon, devil"],["唯一","ゆいいつ","(the) only, unique"],["もうすぐ","もうすぐ","soon, before long"],["中央","ちゅうおう","center"],["突っ込む","つっこむ","to thrust in, to dash into"],["技術","ぎじゅつ","technology"],["素晴らしい","すばらしい","splendid, excellent"],["単純","たんじゅん","simple, uncomplicated"],["穏やか","おだやか","calm, mild"],["撃つ","うつ","to fire, to shoot"],["拾う","ひろう","to pick up, to find"],["完成","かんせい","completion, finish"],["毒","どく","poison, harm"],["馬","うま","horse"],["覆う","おおう","to cover, to hide"],["趣味","しゅみ","hobby"],["どうにか","どうにか","somehow"],["何となく","なんとなく","for some reason"],["価値","かち","value, merit"],["見守る","みまもる","to watch, to keep watch over"],["安全","あんぜん","safety, security"],["連れてくる","つれてくる","to bring over, to bring along"],["そば","そば","side, vicinity"],["万","まん","ten thousand"],["額","がく","picture frame"],["受け止める","うけとめる","to catch, to receive"],["素敵","すてき","lovely, superb"],["正体","しょうたい","true character, true form"],["あっさり","あっさり","lightly, easily, simply"],["吸う","すう","to smoke"],["鳴る","なる","to ring, to beep"],["研究","けんきゅう","research"],["まとめる","まとめる","to gather together, to put in order"],["別れる","わかれる","to separate, to part from"],["ふざける","ふざける","to mess around, to fool around"],["着替える","きがえる","to change clothes"],["箱","はこ","box, case"],["無言","むごん","silence, muteness"],["何で","なんで","why, what for"],["裏切る","うらぎる","to betray"],["焼く","やく","to burn, to bake"],["怪我","けが","injury"],["門","もん","gate, entrance"],["不可能","ふかのう","impossible"],["妻","つま","wife"],["時には","ときには","occasionally, at times"],["発言","はつげん","speech"],["正確","せいかく","accurate, precise"],["認識","にんしき","recognition, acknowledgment"],["速度","そくど","velocity, speed"],["謎","なぞ","mystery, puzzle"],["文字","もじ","character, letter"],["吐く","はく","to spew, to vomit, to holler"],["鬼","おに","demon, ogre"],["刺激","しげき","stimulus, stimulation"],["最も","もっとも","the most"],["制服","せいふく","uniform"],["爆発","ばくはつ","blast, explosion"],["訓練","くんれん","training, drill"],["振り向く","ふりむく","to turn around, to look back"],["脱ぐ","ぬぐ","to remove clothes, to take off"],["信頼","しんらい","trust, faith"],["寄る","よる","to stop by, to drop by"],["飛ばす","とばす","to fly, to launch in the air"],["貸す","かす","to lend, to lease"],["パン","ぱん","bread"],["ありがたい","ありがたい","welcome, grateful"],["赤","あか","red"],["大体","だいたい","mostly"],["きちんと","きちんと","neatly, accurately"],["喉","のど","throat"],["少々","しょうしょう","a little, a few"],["有名","ゆうめい","famous"],["船","ふね","ship, boat"],["転がる","ころがる","to roll over, to tumble"],["切れる","きれる","to be able to cut, to run out, to expire"],["たった","たった","only, merely"],["話題","わだい","topic of conversation"],["濡れる","ぬれる","to get wet"],["ついでに","ついでに","on the way, while one's at it"],["呼び出す","よびだす","to call someone to"],["確信","かくしん","firm belief, conviction"],["込める","こめる","to put in, to concentrate on"],["自覚","じかく","awareness"],["空く","あく","to become available or vacant"],["空く","すく","to be empty, to become less crowded","空く|すく"],["警察","けいさつ","police"],["悲鳴","ひめい","shriek, scream"],["捕まえる","つかまえる","to arrest, to capture"],["早速","さっそく","immediately"],["お腹","おなか","stomach, belly"],["掃除","そうじ","cleaning"],["硬い","かたい","hard, stiff"],["際","さい","occasion, time"],["漏らす","もらす","to give away, to let leak"],["面","めん","surface, aspect"],["不満","ふまん","dissatisfaction, discontent"],["驚き","おどろき","surprise, amazement"],["旅","たび","journey, travel"],["絵","え","picture, drawing"],["組む","くむ","to pair up, to partner with"],["沈黙","ちんもく","reticence, silence"],["張る","はる","to strain, to be stretched"],["告白","こくはく","confession, admission"],["舐める","なめる","to lick"],["潰す","つぶす","to crush, to smash"],["含める","ふくめる","to include"],["時期","じき","time, season, period"],["活動","かつどう","activity"],["育てる","そだてる","to bring up, to breed"],["優秀","ゆうしゅう","excellent, exceptional"],["予感","よかん","hunch, premonition"],["解く","とく","to solve"],["元々","もともと","originally, by nature"],["溢れる","あふれる","to overflow, to flood"],["発生","はっせい","occurrence, happening"],["微妙","びみょう","subtle, delicate, sensitive, iffy"],["違い","ちがい","difference, mistake"],["直後","ちょくご","immediately after"],["地下","ちか","underground"],["香り","かおり","perfume, fragrance"],["効く","きく","to be effective"],["使用","しよう","usage"],["道具","どうぐ","tool"],["願い","ねがい","wish, request"],["洗う","あらう","to wash"],["手段","しゅだん","means, way"],["誤解","ごかい","misunderstanding"],["応援","おうえん","cheering"],["含む","ふくむ","to contain, to include"],["当時","とうじ","at that time, at the present time"],["勝利","しょうり","triumph, victory"],["降る","ふる","to fall (e.g. rain)"],["雪","ゆき","snow, snowfall"],["入り口","いりぐち","entrance"],["一方","いっぽう","one way"],["古い","ふるい","old"],["役に立つ","やくにたつ","to be useful, to be helpful"],["懐かしい","なつかしい","longed-for, nostalgic"],["もしも","もしも","if, if ever"],["才能","さいのう","talent, ability"],["逃げ出す","にげだす","to make a break for, to run off"],["様々","さまざま","various, diverse"],["病院","びょういん","hospital"],["比べる","くらべる","to compare, to contrast"],["氷","こおり","ice"],["狭い","せまい","narrow, cramped"],["神様","かみさま","God, the divine"],["動揺","どうよう","shaking, turbulence"],["長","ちょう","chief, head"],["なお","なお","still, in addition"],["物語","ものがたり","story, tale"],["文句","もんく","complaint"],["至る","いたる","to come to, to reach"],["魚","さかな","fish"],["鳥","とり","bird"],["映る","うつる","to be reflected, to appear"],["一生","いっしょう","a lifetime"],["紙","かみ","paper"],["申す","もうす","to be called..., to speak (humble form)"],["複雑","ふくざつ","complicated, intricate"],["投げる","なげる","to throw, to abandon"],["出来事","できごと","occurrence, incident"],["部下","ぶか","subordinate"],["たっぷり","たっぷり","fully, amply"],["実力","じつりょく","real ability, capability"],["左右","さゆう","right and left"],["選択","せんたく","choice, selection"],["調査","ちょうさ","investigation, inquiry"],["例えば","たとえば","for example"],["見送る","みおくる","to see (someone) off"],["もっとも","もっとも","quite right, reasonable"],["従う","したがう","to follow, to obey"],["通す","とおす","to let pass, to run through"],["間違える","まちがえる","to mistake, to confuse"],["体力","たいりょく","stamina, endurance"],["果たす","はたす","to accomplish, to carry out, to fulfill"],["騒ぐ","さわぐ","to make a racket, to mess around"],["飛び込む","とびこむ","to dive into"],["増す","ます","to increase, to augment, to rise"],["ぶつかる","ぶつかる","to hit, to bump into"],["思い出","おもいで","recollections, memory"],["天井","てんじょう","ceiling"],["兵士","へいし","soldier"],["満ちる","みちる","to fill, to become full"],["たまらない","たまらない","can't stand, can't put up with"],["味わう","あじわう","to taste, to appreciate"],["出かける","でかける","to go out"],["背負う","せおう","to carry on one's back, to shoulder"],["揃う","そろう","to be (all) together"],["呼吸","こきゅう","breathing, respiration"],["真似","まね","imitation, mimicry"],["人気","にんき","popularity"],["偉い","えらい","great, famous"],["いよいよ","いよいよ","finally, at last"],["対象","たいしょう","target, object"],["整える","ととのえる","to arrange, to adjust"],["沈む","しずむ","to sink, to set"],["地上","ちじょう","above ground"],["用事","ようじ","things to do, errand, business"],["よる","よる","to be caused by"],["反対","はんたい","oppose, object"],["保つ","たもつ","to preserve, to endure"],["歴史","れきし","history"],["島","しま","island, isle"],["それほど","それほど","so much, that much"],["実に","じつに","truly, surely"],["恐れる","おそれる","to fear, to apprehend"],["あくまで","あくまで","to the end, persistently"],["鼻","はな","nose"],["担当","たんとう","person in charge"],["片手","かたて","one hand"],["幼い","おさない","young, childish"],["学ぶ","まなぶ","to learn, to study"],["強引","ごういん","overbearing, pushy"],["捲る","まくる","to turn up, to roll up (e.g. sleeves)"],["漏れる","もれる","to leak, to be disclosed"],["全体","ぜんたい","whole, total"],["度","ど","degree, extent"],["情けない","なさけない","pathetic, shameful"],["太陽","たいよう","sun"],["甘える","あまえる","to depend on, to take advantage of"],["踏む","ふむ","to step on, to tread on"],["印象","いんしょう","impression"],["死体","したい","corpse, body"],["支配","しはい","control, management"],["現場","げんば","actual spot, job site"],["絶望","ぜつぼう","despair, hopelessness"],["察する","さっする","to sense, to guess"],["以来","いらい","since"],["漂う","ただよう","to drift, to float"],["探る","さぐる","to probe, to search into"],["最大","さいだい","biggest, largest"],["下げる","さげる","to lower, to turn down"],["捕まる","つかまる","to be caught, to be arrested"],["戸惑う","とまどう","to be perplexed, to be bewildered"],["言い訳","いいわけ","apology, excuse"],["証明","しょうめい","proof, evidence"],["参る","まいる","to go, come (humble form)"],["見下ろす","みおろす","to look down, to overlook"],["燃える","もえる","to burn, to get fired up"],["たまる","たまる","to accumulate, to store up"],["暴れる","あばれる","to act violently, to rage about"],["越える","こえる","to go over, to go across, to go beyond"],["精神","せいしん","mind, spirit"],["男子","だんし","boy, young man"],["宣言","せんげん","declaration"],["挟む","はさむ","to hold between, to put between, to pinch"],["防ぐ","ふせぐ","to prevent, to defend"],["預ける","あずける","to deposit, to entrust"],["限る","かぎる","to be limited to"],["責める","せめる","to blame"],["崩れる","くずれる","to crumble, to collapse"],["一度も","いちども","(not) even once, (not) ever"],["ぼんやり","ぼんやり","vaguely, absent-mindedly"],["その内","そのうち","before long, sooner or later"],["鏡","かがみ","mirror"],["貫く","つらぬく","to go through, to carry out"],["固まる","かたまる","to harden, to solidify"],["平和","へいわ","peace, harmony"],["意志","いし","will, volition"],["下手","へた","bad at, poor"],["続き","つづき","continuation, sequel"],["祈る","いのる","to pray"],["午後","ごご","afternoon, p.m."],["同様","どうよう","similar"],["外れる","はずれる","to come undone, to be removed"],["歌う","うたう","to sing"],["回","かい","times"],["固い","かたい","stiff, tight"],["最強","さいきょう","strongest"],["弾く","ひく","to strum (e.g. a guitar), to flick"],["正解","せいかい","right answer, correct solution"],["きつい","きつい","tight, tough"],["お陰","おかげ","help, thanks to"],["地獄","じごく","hell"],["年齢","ねんれい","age, years"],["病気","びょうき","illness"],["携帯","けいたい","cell phone"],["ますます","ますます","increasingly"],["並べる","ならべる","to line up, to display, to set up"],["契約","けいやく","contract, agreement"],["永遠","えいえん","eternity"],["不意に","ふいに","suddenly, unexpectedly"],["呪い","のろい","curse, spell"],["組","くみ","school class"],["踊る","おどる","to dance"],["目覚める","めざめる","to wake (up), to come to one's senses"],["事故","じこ","accident, incident"],["袋","ふくろ","bag, sack"],["派手","はで","showy, flashy"],["今更","いまさら","now (when it's too late), at this stage"],["真っ直ぐ","まっすぐ","straight ahead, straightforward"],["油断","ゆだん","inattention, carelessness"],["ぶつける","ぶつける","to bump"],["育つ","そだつ","to be brought up, to grow"],["傷つく","きずつく","to get hurt"],["発する","はっする","to emit, to radiate"],["終了","しゅうりょう","end, expiry"],["足音","あしおと","sound of footsteps"],["決意","けつい","decision, resolution"],["感心","かんしん","admiration"],["飲み込む","のみこむ","to swallow, to grasp"],["仮に","かりに","supposing that, even if"],["お菓子","おかし","sweets, snacks"],["染まる","そまる","to be dyed, to be tainted"],["笑い","わらい","laughter, laugh"],["買い物","かいもの","shopping"],["歌","うた","song"],["庭","にわ","garden, yard"],["生き物","いきもの","living creature"],["特殊","とくしゅ","special, unique"],["連れて行く","つれていく","to take (a person) along"],["現状","げんじょう","present condition"],["大分","だいぶ","very, greatly"],["底","そこ","bottom"],["学生","がくせい","student"],["丁寧","ていねい","polite, careful"],["範囲","はんい","range, scope"],["テレビ","テレビ","television"],["美人","びじん","beautiful woman"],["技","わざ","skill"],["将来","しょうらい","one's future, in the future"],["記録","きろく","record, documentation"],["大人しい","おとなしい","tame, quiet, obedient, calm"],["骨","ほね","bone"],["目標","もくひょう","target, goal"],["肉体","にくたい","body, flesh"],["届ける","とどける","to deliver, to give notice"],["足元","あしもと","step, under foot"],["捜す","さがす","to look for, to search for"],["わざと","わざと","on purpose"],["いかが","いかが","how, would you like"],["布","ぬの","cloth"],["種類","しゅるい","kind, species"],["満たす","みたす","to fill, to satisfy"],["景色","けしき","scenery"],["勇気","ゆうき","courage, nerve"],["強化","きょうか","strengthening"],["加える","くわえる","to add, to include"],["言い出す","いいだす","to begin to say, to be the first to say, to propose"],["収まる","おさまる","to be settled (e.g. a dispute), to be contained within"],["組織","そしき","organization, structure"],["隙間","すきま","crack, gap"],["本日","ほんじつ","today"],["先日","せんじつ","the other day, a few days ago"],["月曜日","げつようび","Monday"],["火曜日","かようび","Tuesday"],["水曜日","すいようび","Wednesday"],["木曜日","もくようび","Thursday"],["金曜日","きんようび","Friday"],["土曜日","どようび","Saturday"],["日曜日","にちようび","Sunday"],["一つ","ひとつ","one (thing)"],["二つ","ふたつ","two (things)"],["三つ","みっつ","three (things)"],["四つ","よっつ","four (things)"],["五つ","いつつ","five (things)"],["六つ","むっつ","six (things)"],["七つ","ななつ","seven (things)"],["八つ","やっつ","eight (things)"],["九つ","ここのつ","nine (things)"],["評価","ひょうか","evaluation, appraisal, recognition"]];
+var RTK=[["一","","one"],["二","","two"],["三","","three"],["四","","four"],["五","","five"],["六","","six"],["七","","seven"],["八","","eight"],["九","","nine"],["十","","ten"],["口","","mouth"],["日","","day"],["月","","month"],["田","","rice field"],["目","","eye"],["古","","old"],["明","","bright"],["早","","early"],["世","","generation"],["自","","oneself"],["白","","white"],["百","","hundred"],["中","","in"],["千","","thousand"],["舌","","tongue"],["寸","","measurement"],["上","","above"],["下","","below"],["貝","","shellfish"],["員","","employee"],["見","","see"],["元","","beginning"],["頁","","page"],["頑","","stubborn"],["負","","defeat"],["勺","","ladle"],["的","","bull's eye"],["首","","neck"],["乙","","fish guts"],["乱","","riot"],["直","","straightaway"],["具","","tool"],["真","","true"],["工","","craft"],["左","","left"],["右","","right"],["有","","possess"],["刀","","sword"],["刃","","blade"],["切","","cut"],["別","","separate"],["丁","","street"],["町","","village"],["可","","can"],["子","","child"],["女","","woman"],["好","","fond"],["母","","mama"],["兄","","elder brother"],["小","","little"],["少","","few"],["大","","large"],["多","","many"],["夕","","evening"],["外","","outside"],["名","","name"],["石","","stone"],["肖","","resemblance"],["太","","plump"],["川","","stream"],["水","","water"],["泉","","spring"],["原","","meadow"],["願","","petition"],["消","","extinguish"],["土","","soil"],["寺","","Buddhist temple"],["時","","time"],["火","","fire"],["点","","spot"],["魚","","fish"],["里","","ri"],["黒","","black"],["同","","same"],["向","","yonder"],["字","","character"],["守","","guard"],["完","","perfect"],["安","","relax"],["富","","wealth"],["木","","tree"],["林","","grove"],["森","","forest"],["村","","town"],["相","","inter-"],["本","","book"],["未","","not yet"],["味","","flavor"],["妹","","younger sister"],["若","","young"],["草","","grass"],["苦","","suffering"],["葉","","leaf"],["兆","","Omen"],["犬","","dog"],["状","","status quo"],["然","","sort of thing"],["牛","","cow"],["特","","special"],["告","","revelation"],["先","","before"],["介","","jammed in"],["界","","world"],["茶","","tea"],["合","","fit"],["王","","king"],["玉","","jewel"],["現","","present"],["全","","whole"],["理","","logic"],["主","","lord"],["金","","gold"],["道","","road-way"],["逃","","escape"],["辺","","border"],["車","","car"],["連","","take along"],["前","","in front"],["各","","each"],["客","","guest"],["夏","","summer"],["落","","fall"],["運","","carry"],["夢","","dream"],["高","","tall"],["京","","capital"],["景","","scenery"],["周","","circumference"],["週","","week"],["士","","gentleman"],["吉","","good luck"],["売","","sell"],["学","","study"],["覚","","memorize"],["書","","write"],["故","","happenstance"],["言","","say"],["計","","plot"],["詰","","packed"],["話","","tale"],["語","","word"],["読","","read"],["調","","tune"],["式","","style"],["試","","test"],["成","","turn into"],["止","","stop"],["歩","","walk"],["正","","correct"],["定","","determine"],["走","","run"],["衣","","garment"],["遠","","distant"],["初","","first time"],["巾","","towel"],["布","","linen"],["市","","market"],["姉","","elder sister"],["転","","revolve"],["芸","","technique"],["雨","","rain"],["雲","","cloud"],["冬","","winter"],["天","","heavens"],["橋","","bridge"],["立","","stand up"],["泣","","cry"],["敵","","enemy"],["匕","","spoon"],["頃","","about that time"],["北","","north"],["背","","stature"],["比","","compare"],["皆","","all"],["毎","","every"],["梅","","plum"],["海","","sea"],["欠","","lack"],["歌","","song"],["次","","next"],["音","","sound"],["暗","","darkness"],["方","","direction"],["放","","set free"],["地","","ground"],["虫","","insect"],["風","","wind"],["己","","self"],["起","","rouse"],["記","","scribe"],["家","","house"],["場","","location"],["湯","","hot water"],["羊","","sheep"],["美","","beauty"],["達","","accomplished"],["着","","don"],["誰","","who"],["集","","gather"],["進","","advance"],["確","","assurance"],["午","","noon"],["許","","permit"],["羽","","feathers"],["習","","learn"],["曜","","weekday"],["国","","country"],["園","","park"],["回","","times"],["店","","store"],["庫","","warehouse"],["心","","heart"],["思","","think"],["意","","idea"],["想","","concept"],["息","","breath"],["感","","emotion"],["怖","","dreadful"],["必","","invariably"],["手","","hand"],["打","","strike"],["我","","ego"],["持","","hold"],["描","","sketch"],["鼻","","nose"],["型","","mould"],["才","","genius"],["存","","suppose"],["在","","exist"],["丈","","length"],["史","","history"],["吏","","officer"],["又","","or again"],["奴","","guy"],["怒","","angry"],["友","","friend"],["投","","throw"],["撃","","beat"],["支","","branch"],["技","","skill"],["反","","anti-"],["坂","","slope"],["返","","return"],["爪","","claw"],["受","","accept"],["愛","","love"],["広","","wide"],["台","","pedestal"],["始","","commence"],["去","","gone"],["法","","method"],["会","","meeting"],["至","","climax"],["室","","room"],["到","","arrival"],["育","","bring up"],["流","","current"],["出","","exit"],["山","","mountain"],["入","","enter"],["込","","crowded"],["分","","part"],["皮","","pelt"],["波","","waves"],["残","","remainder"],["列","","file"],["死","","death"],["耳","","ear"],["取","","take"],["最","","utmost"],["買","","buy"],["置","","placement"],["夫","","husband"],["失","","lose"],["力","","power"],["男","","man"],["努","","toil"],["加","","add"],["行","","going"],["待","","wait"],["彼","","he"],["役","","duty"],["街","","boulevard"],["和","","harmony"],["私","","private"],["利","","profit"],["香","","incense"],["米","","rice"],["数","","number"],["様","","Esq."],["竹","","bamboo"],["笑","","laugh"],["筆","","writing brush"],["答","","solution"],["人","","person"],["仲","","go-between"],["体","","body"],["仕","","attend"],["伝","","transmit"],["休","","rest"],["信","","faith"],["倒","","overthrow"],["使","","use"],["付","","adhere"],["任","","responsibility"],["代","","substitute"],["化","","change"],["花","","flower"],["何","","what"],["俺","","myself"],["内","","inside"],["肉","","meat"],["座","","sit"],["以","","by means of"],["似","","similar"],["年","","year"],["夜","","night"],["物","","thing"],["易","","easy"],["屋","","roof"],["戸","","door"],["戻","","re-"],["示","","show"],["礼","","salutation"],["社","","company"],["由","","wherefore"],["油","","oil"],["申","","speaketh"],["神","","gods"],["果","","fruit"],["斤","","ax"],["所","","place"],["近","","near"],["昨","","yesterday"],["作","","make"],["雪","","snow"],["急","","hurry"],["当","","hit"],["事","","matter"],["君","","old boy"],["用","","utilize"],["昔","","once upon a time"],["廿","","twenty"],["席","","seat"],["度","","degrees"],["渡","","transit"],["半","","half"],["巻","","scroll"],["勝","","victory"],["不","","negative"],["矢","","dart"],["知","","know"],["帰","","homecoming"],["弓","","bow"],["引","","pull"],["強","","strong"],["弱","","weak"],["身","","somebody"],["老","","old man"],["考","","consider"],["孝","","filial piety"],["教","","teach"],["者","","someone"],["父","","father"],["交","","mingle"],["校","","exam"],["足","","leg"],["過","","overdo"],["陽","","sunshine"],["防","","ward off"],["降","","descend"],["穴","","hole"],["空","","empty"],["探","","grope"],["深","","deep"],["糸","","thread"],["緒","","thong"],["続","","continue"],["絵","","picture"],["結","","tie"],["終","","end"],["級","","class"],["約","","promise"],["後","","behind"],["幾","","how many"],["機","","mechanism"],["命","","fate"],["通","","traffic"],["酉","","sign of the bird"],["酒","","saké"],["配","","distribute"],["豆","","beans"],["頭","","head"],["皿","","dish"],["血","","blood"],["温","","warm"],["銀","","silver"],["根","","root"],["良","","good"],["娘","","daughter"],["食","","eat"],["飯","","meal"],["飲","","drink"],["平","","even"],["呼","","call"],["殺","","kill"],["辛","","spicy"],["新","","new"],["親","","parent"],["術","","art"],["青","","blue"],["情","","feelings"],["表","","surface"],["喉","","throat"],["生","","life"],["星","","star"],["性","","sex"],["実","","reality"],["今","","now"],["予","","beforehand"],["野","","plains"],["兼","","concurrently"],["嫌","","dislike"],["西","","west"],["要","","need"],["門","","gates"],["問","","question"],["間","","interval"],["開","","open"],["聞","","hear"],["非","","un-"],["輩","","comrade"],["決","","decide"],["違","","difference"],["束","","bundle"],["頼","","trust"],["重","","heavy"],["動","","move"],["発","","discharge"],["彦","","lad"],["顔","","face"],["文","","sentence"],["対","","vis-à-vis"],["楽","","music"],["赤","","red"],["変","","unusual"],["色","","color"],["絶","","discontinue"],["貴","","precious"],["無","","nothingness"],["助","","help"],["並","","row"],["普","","universal"],["業","","profession"],["僕","","me"],["共","","together"],["異","","uncommon"],["選","","elect"],["亜","","Asia"],["悪","","bad"],["円","","circle"],["角","","angle"],["解","","unravel"],["部","","section"],["郎","","son"],["来","","come"],["気","","spirit"],["飛","","fly"],["面","","mask"],["声","","voice"],["番","","turn"],["毛","","fur"],["長","","long"],["張","","lengthen"],["単","","simple"],["戦","","war"],["能","","ability"],["態","","attitude"],["送","","send off"],["関","","connection"],["鬼","","ghost"],["魔","","witch"],["吾","","I"],["品","","goods"],["呂","","spine"],["旦","","nightbreak"],["旧","","olden times"],["升","","measuring box"],["丸","","round"],["専","","specialty"],["博","","Dr."],["占","","fortune-telling"],["朝","","morning"],["児","","newborn babe"],["凡","","mediocre"],["万","","ten thousand"],["句","","phrase"],["召","","seduce"],["昭","","shining"],["則","","rule"],["頂","","place on the head"],["了","","complete"],["砕","","smash"],["砂","","sand"],["光","","ray"],["器","","utensil"],["妙","","exquisite"],["省","","focus"],["奇","","strange"],["州","","state"],["順","","obey"],["永","","eternity"],["源","","source"],["活","","lively"],["泊","","overnight"],["圭","","squared jewel"],["炎","","inflammation"],["照","","illuminate"],["量","","quantity"],["埋","","bury"],["寄","","draw near"],["植","","plant"],["暦","","calendar"],["案","","plan"],["末","","extremity"],["朱","","vermilion"],["薄","","dilute"],["暮","","livelihood"],["苗","","seedling"],["眺","","stare"],["黙","","silence"],["洗","","wash"],["狂","","lunatic"],["呈","","display"],["注","","pour"],["造","","create"],["迫","","urge"],["格","","status"],["略","","abbreviation"],["額","","forehead"],["処","","dispose"],["条","","twig"],["軍","","army"],["舎","","cottage"],["壮","","robust"],["津","","haven"],["攻","","aggression"],["敗","","failure"],["枚","","a sheet of"],["敬","","awe"],["警","","admonish"],["談","","discuss"],["域","","range"],["城","","castle"],["威","","intimidate"],["滅","","destroy"],["減","","dwindle"],["銭","","coin"],["浅","","shallow"],["歴","","curriculum"],["武","","warrior"],["証","","evidence"],["政","","politics"],["超","","transcend"],["越","","surpass"],["是","","just so"],["題","","topic"],["建","","build"],["装","","attire"],["裏","","back"],["哀","","pathetic"],["幕","","curtain"],["帯","","sash"],["刺","","thorn"],["制","","system"],["章","","badge"],["商","","make a deal"],["適","","suitable"],["旨","","delicious"],["腹","","abdomen"],["吹","","blow"],["資","","assets"],["姿","","figure"],["識","","discriminating"],["鏡","","mirror"],["境","","boundary"],["亡","","deceased"],["荒","","laid waste"],["望","","ambition"],["坊","","boy"],["訪","","call on"],["激","","violent"],["脱","","undress"],["説","","explanation"],["曽","","formerly"],["増","","increase"],["東","","east"],["廷","","courts"],["染","","dye"],["歳","","year-end"],["県","","prefecture"],["池","","pond"],["独","","single"],["改","","reformation"],["包","","wrap"],["亀","","tortoise"],["電","","electricity"],["遂","","consummate"],["洋","","ocean"],["詳","","detailed"],["差","","distinction"],["唯","","solely"],["焦","","char"],["雑","","miscellaneous"],["準","","semi-"],["奪","","rob"],["権","","authority"],["観","","outlook"],["翌","","the following"],["困","","quandary"]];
+var deck=DEFAULT.slice(),rtk=RTK.slice(),kind="w",locked=false,cur=null,right=0,wrong=0,lastId="",shownAt=0;
+var $=function(i){return document.getElementById(i)};
+
+/* FSRS-4.5 with default weights, target retention 90% */
+var W=[0.4872,1.4003,3.7145,13.8206,5.1618,1.2298,0.8975,0.031,1.6474,0.1367,1.0461,2.1072,0.0793,0.3246,1.587,0.2272,2.8755];
+var FAC=19/81,DEC=-0.5,DAY=864e5;
+function cid(k,e){return k+":"+(e[3]||e[0])}
+function clampD(d){return Math.min(10,Math.max(1,d))}
+function retr(t,s){return Math.pow(1+FAC*t/s,DEC)}
+function ivl(s,r){return s/FAC*(Math.pow(r,1/DEC)-1)}
+function review(c,g,now){
+  if(!c.s){c.s=W[g-1];c.d=clampD(W[4]-W[5]*(g-3))}
+  else{
+    var r=retr((now-c.last)/DAY,c.s);
+    var d=clampD(W[7]*W[4]+(1-W[7])*clampD(c.d-W[6]*(g-3)));
+    if(g===1){c.s=Math.max(0.1,W[11]*Math.pow(c.d,-W[12])*(Math.pow(c.s+1,W[13])-1)*Math.exp(W[14]*(1-r)));c.lapses++}
+    else{c.s=c.s*(1+Math.exp(W[8])*(11-c.d)*Math.pow(c.s,-W[9])*(Math.exp(W[10]*(1-r))-1)*(g===2?W[15]:1)*(g===4?W[16]:1))}
+    c.d=d;
+  }
+  c.reps++;c.last=now;
+  c.due=g===1?now+3e4:now+Math.max(1,Math.round(ivl(c.s,0.9)))*DAY;
+}
+function fmt(ms){var m=Math.round(ms/6e4);if(m<60)return Math.max(1,m)+" min";var h=Math.round(m/60);if(h<24)return h+" h";var d=Math.round(h/24);return d+(d===1?" day":" days")}
+
+/* saved progress: browser storage as a cache, plus Home Assistant when hosted as a panel */
+var S={c:{},m:{day:"",n:0}};
+var IN_HA=window.parent!==window&&location.pathname.indexOf("/local/")===0;
+var pend={},pid=0,haOK=false,lastSync="",pt=null;
+window.addEventListener("message",function(e){
+  var d=e.data;
+  if(e.origin!==location.origin||!d||d.kaishi!==1||!pend[d.id])return;
+  var f=pend[d.id];delete pend[d.id];f(d);
+});
+function bridge(msg,cb,ms){
+  if(!IN_HA){cb(null);return}
+  var id=++pid,t=setTimeout(function(){delete pend[id];cb(null)},ms);
+  pend[id]=function(d){clearTimeout(t);cb(d)};
+  msg.kaishi=1;msg.id=id;
+  window.parent.postMessage(msg,location.origin);
+}
+function hastatus(){
+  $("hastatus").textContent=!IN_HA?"Saving in this browser only. Open it from the Home Assistant panel to sync with Home Assistant.":
+    haOK?"Synced with Home Assistant"+(lastSync?" at "+lastSync:""):"Home Assistant not reachable. Saving in this browser only.";
+}
+function bundle(){
+  var b={v:1,ts:S.ts||0,srs:S};
+  try{var d=localStorage.getItem("kd");if(d)b.kd=JSON.parse(d);var r=localStorage.getItem("kr");if(r)b.kr=JSON.parse(r)}catch(e){}
+  return b;
+}
+function push(){
+  clearTimeout(pt);pt=null;
+  bridge({op:"set",value:bundle()},function(d){
+    haOK=!!(d&&d.ok);
+    if(haOK)lastSync=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+    hastatus();
+  },8000);
+}
+function save(){
+  try{S.lim=+$("lim").value||20;S.ts=Date.now();localStorage.setItem("srs",JSON.stringify(S))}catch(e){}
+  clearTimeout(pt);pt=setTimeout(push,3000);
+}
+function saveDeck(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}save()}
+function normalise(){
+  var today=new Date().toLocaleDateString("en-CA");
+  if(!S.c)S.c={};
+  if(!S.m||S.m.day!==today)S.m={day:today,n:0,c:0,w:0};
+  if(S.lim)$("lim").value=S.lim;
+}
+function load(){
+  try{S=JSON.parse(localStorage.getItem("srs"))||S}catch(e){}
+  try{var d=JSON.parse(localStorage.getItem("kd"));if(d&&d.length>=4)deck=d}catch(e){}
+  try{var r=JSON.parse(localStorage.getItem("kr"));if(r&&r.length>=4)rtk=r}catch(e){}
+  normalise();
+}
+function apply(b){
+  S=b.srs;
+  try{localStorage.setItem("srs",JSON.stringify(S))}catch(e){}
+  if(b.kd&&b.kd.length>=4){deck=b.kd;try{localStorage.setItem("kd",JSON.stringify(b.kd))}catch(e){}}
+  if(b.kr&&b.kr.length>=4){rtk=b.kr;try{localStorage.setItem("kr",JSON.stringify(b.kr))}catch(e){}}
+  normalise();
+}
+window.addEventListener("pagehide",function(){if(pt)push()});
+document.addEventListener("visibilitychange",function(){if(document.hidden&&pt)push()});
+function stats(){
+  var now=Date.now(),due=0,tot=0;
+  for(var id in S.c){tot++;if(S.c[id].due<=now)due++}
+  $("stats").textContent="Due "+due+", seen overall "+tot+", new today "+S.m.n+" of "+(+$("lim").value||20);
+}
+
+/* choose the next card: due reviews first, then new cards in deck order */
+function pick(){
+  var now=Date.now(),m=$("mode").value,ks=m==="words"?["w"]:m==="rtk"?["k"]:["w","k"];
+  var due=null,soon=null,nw={w:null,k:null},dd=0,sd=0,seen=[];
+  ks.forEach(function(k){
+    (k==="k"?rtk:deck).forEach(function(e){
+      var id=cid(k,e),c=S.c[id];
+      if(!c){if(!nw[k])nw[k]={k:k,e:e};return}
+      if(id===lastId)return;
+      seen.push({k:k,e:e});
+      if(c.due<=now){if(!due||c.due<dd){due={k:k,e:e};dd=c.due}}
+      else if(c.due<now+6e5&&(!soon||c.due<sd)){soon={k:k,e:e};sd=c.due}
+    });
+  });
+  if(due)return due;
+  if(S.m.n<(+$("lim").value||20)){
+    if(nw.w&&nw.k)return Math.random()<0.3?nw.k:nw.w;
+    if(nw.w||nw.k)return nw.w||nw.k;
+  }
+  return soon||(seen.length?seen[Math.floor(Math.random()*seen.length)]:null);
+}
+function rate(good){
+  var now=Date.now(),t=(now-shownAt)/1000,c=S.c[lastId],isNew=!c;
+  var g=!good?1:t<4?4:t<12?3:2;
+  if(isNew){c=S.c[lastId]={s:0,d:0,due:0,last:0,reps:0,lapses:0};S.m.n++;if(g===4)g=3}
+  review(c,g,now);save();stats();
+  $("ivl").textContent=g===1?"You'll see this again shortly":"Next review in "+fmt(c.due-now);
+}
+function done(){
+  var now=Date.now(),nx=Infinity;
+  for(var id in S.c)if(S.c[id].due>now&&S.c[id].due<nx)nx=S.c[id].due;
+  locked=true;
+  $("word").className="word";$("word").textContent="✓";
+  $("replay").style.display="none";$("rtklabel").style.display="none";
+  $("reading").textContent="All caught up";
+  $("ivl").textContent=nx<Infinity?"Next review in "+fmt(nx-now):"";
+  var box=$("opts");box.innerHTML="";
+  [["Check again",next]].forEach(function(x){
+    var b=document.createElement("button");b.className="opt";b.textContent=x[0];b.onclick=x[1];box.appendChild(b);
+  });
+}
+
+function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+
+var voices=[];
+function loadVoices(){try{voices=speechSynthesis.getVoices()||[]}catch(e){}}
+function jaVoice(){return voices.filter(function(x){return /^ja/i.test((x.lang||"").replace("_","-"))})[0]}
+function note(){
+  var n=$("voicenote");
+  if(!window.speechSynthesis){n.textContent="This browser doesn't support speech. Try Chrome, Edge or Safari.";return}
+  n.textContent=jaVoice()?"":"No Japanese voice found on this device. Install one in your system's speech settings (on iPhone: Settings > Accessibility > Spoken Content > Voices > Japanese).";
+}
+function speak(text){
+  try{
+    if(!window.speechSynthesis)return;
+    loadVoices();
+    speechSynthesis.cancel();
+    setTimeout(function(){
+      var u=new SpeechSynthesisUtterance(text);u.lang="ja-JP";u.rate=0.85;u.volume=1;
+      var v=jaVoice();if(v)u.voice=v;
+      speechSynthesis.resume();
+      speechSynthesis.speak(u);
+    },80);
+  }catch(e){}
+}
+
+function next(){
+  locked=false;
+  var p=pick();
+  if(!p){done();return}
+  kind=p.k;cur=p.e;lastId=cid(kind,cur);shownAt=Date.now();
+  var src=kind==="k"?rtk:deck;
+  var pool=shuffle(src.filter(function(d){return d!==cur&&d[2]!==cur[2]}));
+  $("ivl").textContent="";
+  var opts=shuffle([cur[2]].concat(pool.slice(0,3).map(function(d){return d[2]})));
+  $("word").textContent=cur[0];
+  $("word").className="word"+(kind==="k"?" rtk":"");
+  $("replay").style.display=kind==="k"?"none":"";
+  $("rtklabel").style.display=kind==="k"?"inline-block":"none";
+  $("reading").textContent="";
+  var box=$("opts");box.innerHTML="";
+  opts.forEach(function(m,n){
+    var b=document.createElement("button");
+    b.className="opt";b.textContent=(n+1)+". "+m;b.dataset.m=m;
+    b.onclick=function(){answer(b)};
+    box.appendChild(b);
+  });
+}
+
+function answer(btn){
+  if(locked)return;locked=true;
+  var good=btn.dataset.m===cur[2];
+  rate(good);
+  if(good){right++;btn.classList.add("ok")}else{wrong++;btn.classList.add("bad")}
+  $("c").textContent=right;$("w").textContent=wrong;S.m.c=right;S.m.w=wrong;save();
+  Array.prototype.forEach.call($("opts").children,function(b){
+    b.disabled=true;
+    if(b.dataset.m===cur[2])b.classList.add("ok");
+  });
+  if(kind==="w"){$("reading").textContent=cur[1];speak(cur[1]);}
+  setTimeout(next,3000);
+}
+
+document.addEventListener("keydown",function(e){
+  var n=parseInt(e.key,10);
+  if(n>=1&&n<=4&&!locked){var b=$("opts").children[n-1];if(b)answer(b)}
+});
+
+if(window.speechSynthesis)speechSynthesis.onvoiceschanged=function(){loadVoices();note()};
+loadVoices();note();
+$("replay").onclick=function(){speak(cur&&cur[1]?cur[1]:"こんにちは")};
+$("mode").onchange=function(){var b=$("opts").children[0];if(!b||!b.disabled)next()};
+$("lim").onchange=function(){save();stats()};
+var rc=0;
+$("wipe").onclick=function(){
+  var w=$("wipe");
+  if(!rc){rc=1;w.textContent="Tap again to erase progress";setTimeout(function(){rc=0;w.textContent="Reset SRS progress"},4000);return}
+  S.c={};S.m.n=0;save();rc=0;w.textContent="Reset SRS progress";stats();next();
+};
+$("rfile").onchange=function(e){
+  var f=e.target.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){
+    var ck=+$("ck").value-1,cw=+$("ckw").value-1,out=[];
+    var clean=function(s){return (s||"").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim().replace(/^"|"$/g,"")};
+    r.result.split(/\r?\n/).forEach(function(line){
+      if(!line||line[0]==="#")return;
+      var p=line.indexOf("\t")>-1?line.split("\t"):line.split(",");
+      var k=clean(p[ck]),w=clean(p[cw]);
+      if(k&&w&&k.length<=2)out.push([k,"",w]);
+    });
+    if(out.length>=4){rtk=out;saveDeck("kr",out);$("rtkinfo").textContent="Loaded "+out.length+" RTK kanji.";next()}
+    else $("rtkinfo").textContent="Couldn't find enough rows. Check the column numbers and try again.";
+  };
+  r.readAsText(f);
+};
+
+$("file").onchange=function(e){
+  var f=e.target.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){
+    var cw=+$("cw").value-1,cr=+$("cr").value-1,cm=+$("cm").value-1,out=[];
+    r.result.split(/\r?\n/).forEach(function(line){
+      if(!line||line[0]==="#")return;
+      var p=line.indexOf("\t")>-1?line.split("\t"):line.split(",");
+      var clean=function(s){return (s||"").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/\s+/g," ").trim().replace(/^"|"$/g,"")};
+      var w=clean(p[cw]),rd=clean(p[cr]),m=clean(p[cm]);
+      if(w&&rd&&m)out.push([w,rd,m.length>70?m.slice(0,70)+"…":m]);
+    });
+    if(out.length>=4){deck=out;saveDeck("kd",out);$("deckinfo").textContent="Loaded "+out.length+" words.";next()}
+    else $("deckinfo").textContent="Couldn't find enough rows. Check the column numbers and try again.";
+  };
+  r.readAsText(f);
+};
+$("reset").onclick=function(){right=wrong=0;S.m.c=S.m.w=0;save();$("c").textContent=0;$("w").textContent=0};
+function refresh(){
+  right=S.m.c||0;wrong=S.m.w||0;$("c").textContent=right;$("w").textContent=wrong;
+  $("deckinfo").textContent="Words in deck: "+deck.length;
+  $("rtkinfo").textContent="RTK kanji in deck: "+rtk.length;
+  stats();
+}
+$("exp").onclick=function(){
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(bundle())],{type:"application/json"}));
+  a.download="kaishi-progress.json";document.body.appendChild(a);a.click();a.remove();
+};
+$("imp").onchange=function(e){
+  var f=e.target.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){
+    try{var b=JSON.parse(r.result);if(!b||!b.srs)throw 0;apply(b);save();refresh();next();$("impinfo").textContent="Progress imported."}
+    catch(x){$("impinfo").textContent="That file isn't a valid progress export."}
+  };
+  r.readAsText(f);
+};
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function renderList(){
+  var k=$("bd").value,f=$("bf").value,src=k==="k"?rtk:deck,now=Date.now(),out=[],seenN=0,dueN=0;
+  src.forEach(function(e,i){
+    var c=S.c[cid(k,e)];
+    if(c){seenN++;if(c.due<=now)dueN++}
+    if(f==="new"&&c)return;
+    if(f==="seen"&&!c)return;
+    if(f==="due"&&!(c&&c.due<=now))return;
+    if(f==="lapsed"&&!(c&&c.lapses>0))return;
+    var st="#"+(i+1)+", new";
+    if(c){
+      var rec=Math.round(retr((now-c.last)/DAY,c.s)*100),dd=c.due-now;
+      st="#"+(i+1)+", seen "+c.reps+"x, lapses "+c.lapses+", stability "+(c.s<10?c.s.toFixed(1):Math.round(c.s))+" d, difficulty "+c.d.toFixed(1)+", recall "+rec+"%, "+(dd<=0?"due now":"due in "+fmt(dd));
+    }
+    out.push('<div class="br'+(k==="k"?" k":"")+'"><span class="w" lang="ja">'+esc(e[0])+'</span>'+esc((e[1]?e[1]+", ":"")+e[2])+'<small>'+st+'</small></div>');
+  });
+  $("bcount").textContent=out.length+" shown of "+src.length+". Seen "+seenN+", due "+dueN+".";
+  $("blist").innerHTML=out.join("");
+  $("blist").scrollTop=0;
+}
+$("bd").onchange=renderList;$("bf").onchange=renderList;$("bgo").onclick=renderList;
+load();refresh();hastatus();
+bridge({op:"get"},function(d){
+  var b=d&&d.value;
+  haOK=!!(d&&d.ok);
+  if(haOK){
+    if(b&&b.srs&&(b.ts||0)>(S.ts||0)){apply(b);refresh()}
+    else push();
+  }
+  hastatus();
+  next();
+},1500);
+</script>
+</body>
+</html>
