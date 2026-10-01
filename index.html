@@ -18,9 +18,14 @@ main{max-width:560px;margin:0 auto;padding:20px 16px 40px}
 .score{flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 10px;display:flex;justify-content:space-between;align-items:baseline}
 .score{font-size:13px}
 .score b{font-size:16px}
+.score.h b{color:#c98a00}
+.score.h.rec{border-color:#e0a800;background:#fff8e1;color:#3a2c00}
+@media (max-width:460px){.score{flex-direction:column;align-items:center;justify-content:center;padding:3px 4px;line-height:1.2;text-align:center}.score span{white-space:nowrap;font-size:11px}}
 .score.c b{color:var(--ok)}.score.w b{color:var(--bad)}
 .word{font-family:"Noto Serif JP","Hiragino Mincho ProN","Yu Mincho",serif;font-weight:600;font-size:clamp(72px,26vw,140px);text-align:center;margin:8px 0 4px;line-height:1.15;word-break:break-all;color:#fff}
-.word.rtk{color:#ff9f43}
+.word{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.word.rtk{color:#ff9f43;cursor:default}
+#fsbtn{padding:2px 10px;font-size:18px;line-height:1}
 .stats{color:var(--mute);font-size:13px;text-align:center;margin-top:6px}
 #blist{max-height:60vh;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
 #blist:empty{display:none}
@@ -42,6 +47,26 @@ summary{cursor:pointer}
 .imp{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
 .imp input[type=number]{width:52px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
 button.s{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+@media (orientation:portrait) and (min-width:700px){
+  main{max-width:780px}
+  .opt{font-size:22px;padding:20px 22px}
+}
+@media (orientation:landscape) and (min-width:700px){
+  main{max-width:1320px;padding:10px 28px 24px;min-height:100vh;display:grid;
+    grid-template-columns:minmax(0,7fr) minmax(0,13fr);grid-template-rows:auto auto 1fr auto auto auto;column-gap:28px;
+    grid-template-areas:"sc sc" "st st" "sg op" "rp ." "vn vn" "dt dt"}
+  .scores{grid-area:sc;width:100%;max-width:640px;margin:0 auto}
+  .stats{grid-area:st}
+  .stage{grid-area:sg;margin:10px 0 0;padding:10px 12px;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:0}
+  .rp{grid-area:rp;margin:10px 0 0 !important}
+  .opts{grid-area:op;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:12px;margin:10px 0 0}
+  .opts .opt:only-child{grid-column:1/-1}
+  .opt{font-size:clamp(22px,6vh,56px);padding:0 16px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.2}
+  .opt.md{font-size:clamp(19px,4.8vh,44px)}
+  .opt.sm{font-size:clamp(16px,3.8vh,34px)}
+  #voicenote{grid-area:vn}
+  details{grid-area:dt}
+}
 </style>
 </head>
 <body>
@@ -49,14 +74,16 @@ button.s{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid var(--
   <div class="scores">
     <div class="score c"><span>Correct today</span><b id="c">0</b></div>
     <div class="score w"><span>Incorrect today</span><b id="w">0</b></div>
+    <div class="score h" id="hibox"><span>Best day</span><b id="hi">0</b></div>
+    <button class="s" id="fsbtn" title="Full screen" aria-label="Toggle full screen">⛶</button>
   </div>
   <div class="stats" id="stats"></div>
   <div class="stage">
-    <div class="word" id="word" lang="ja"></div>
+    <div class="word" id="word" lang="ja" role="button" tabindex="0" aria-label="Tap to hear the reading"></div>
     <div class="reading" id="reading" lang="ja"></div>
     <div id="ivl" style="text-align:center;color:#8f9bb0;font-size:13px;height:18px"></div>
   </div>
-  <div style="text-align:center;margin-bottom:14px"><button class="s" id="replay">🔊 Play reading</button><span id="rtklabel" style="display:none;color:#ff9f43;font-weight:600;padding:7px 12px;border:1px solid transparent">RTK</span></div>
+  <div class="rp" style="text-align:center;margin-bottom:14px"><button class="s" id="replay">🔊 Play reading</button><span id="rtklabel" style="display:none;color:#ff9f43;font-weight:600;padding:7px 12px;border:1px solid transparent">RTK</span></div>
   <div class="opts" id="opts"></div>
   <p id="voicenote" style="color:var(--bad);font-size:14px"></p>
 
@@ -161,6 +188,7 @@ function save(){
 }
 function saveDeck(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}save()}
 function normalise(){
+  if(S.m&&(S.m.c||0)>(S.hi||0))S.hi=S.m.c;
   var today=new Date().toLocaleDateString("en-CA");
   if(!S.c)S.c={};
   if(!S.m||S.m.day!==today)S.m={day:today,n:0,c:0,w:0};
@@ -218,9 +246,9 @@ function rate(good){
 function done(){
   var now=Date.now(),nx=Infinity;
   for(var id in S.c)if(S.c[id].due>now&&S.c[id].due<nx)nx=S.c[id].due;
-  locked=true;
+  locked=true;cur=null;
   $("word").className="word";$("word").textContent="✓";
-  $("replay").style.display="none";$("rtklabel").style.display="none";
+  $("replay").style.display="none";$("rtklabel").style.display="none";fit();
   $("reading").textContent="All caught up";
   $("ivl").textContent=nx<Infinity?"Next review in "+fmt(nx-now):"";
   var box=$("opts");box.innerHTML="";
@@ -229,6 +257,15 @@ function done(){
   });
 }
 
+function fit(){
+  var w=$("word"),n=Array.from(w.textContent).length||1,
+      avail=w.parentNode.clientWidth-28,
+      land=window.innerWidth>window.innerHeight&&window.innerWidth>=700,
+      max=land?Math.min(300,window.innerHeight*0.36):Math.min(150,window.innerWidth*0.26),
+      lines=Math.min(3,Math.ceil(n/5)),per=Math.ceil(n/lines);
+  w.style.fontSize=Math.max(40,Math.min(max,avail/per*0.92))+"px";
+}
+window.addEventListener("resize",fit);
 function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
 
 var voices=[];
@@ -266,11 +303,12 @@ function next(){
   $("word").className="word"+(kind==="k"?" rtk":"");
   $("replay").style.display=kind==="k"?"none":"";
   $("rtklabel").style.display=kind==="k"?"inline-block":"none";
+  fit();
   $("reading").textContent="";
   var box=$("opts");box.innerHTML="";
   opts.forEach(function(m,n){
     var b=document.createElement("button");
-    b.className="opt";b.textContent=(n+1)+". "+m;b.dataset.m=m;
+    b.className="opt"+(m.length>44?" sm":m.length>22?" md":"");b.textContent=m;b.dataset.m=m;
     b.onclick=function(){answer(b)};
     box.appendChild(b);
   });
@@ -281,7 +319,7 @@ function answer(btn){
   var good=btn.dataset.m===cur[2];
   rate(good);
   if(good){right++;btn.classList.add("ok")}else{wrong++;btn.classList.add("bad")}
-  $("c").textContent=right;$("w").textContent=wrong;S.m.c=right;S.m.w=wrong;save();
+  $("c").textContent=right;$("w").textContent=wrong;S.m.c=right;S.m.w=wrong;if(right>(S.hi||0))S.hi=right;showHi();save();
   Array.prototype.forEach.call($("opts").children,function(b){
     b.disabled=true;
     if(b.dataset.m===cur[2])b.classList.add("ok");
@@ -298,6 +336,8 @@ document.addEventListener("keydown",function(e){
 if(window.speechSynthesis)speechSynthesis.onvoiceschanged=function(){loadVoices();note()};
 loadVoices();note();
 $("replay").onclick=function(){speak(cur&&cur[1]?cur[1]:"こんにちは")};
+$("word").onclick=function(){if(kind==="w"&&cur&&cur[1])speak(cur[1])};
+$("word").onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();this.onclick()}};
 $("mode").onchange=function(){var b=$("opts").children[0];if(!b||!b.disabled)next()};
 $("lim").onchange=function(){save();stats()};
 var rc=0;
@@ -341,9 +381,13 @@ $("file").onchange=function(e){
   };
   r.readAsText(f);
 };
-$("reset").onclick=function(){right=wrong=0;S.m.c=S.m.w=0;save();$("c").textContent=0;$("w").textContent=0};
+$("reset").onclick=function(){right=wrong=0;S.m.c=S.m.w=0;save();showHi();$("c").textContent=0;$("w").textContent=0};
+function showHi(){
+  $("hi").textContent=S.hi||0;
+  $("hibox").classList.toggle("rec",right>0&&right>=(S.hi||0));
+}
 function refresh(){
-  right=S.m.c||0;wrong=S.m.w||0;$("c").textContent=right;$("w").textContent=wrong;
+  right=S.m.c||0;wrong=S.m.w||0;$("c").textContent=right;$("w").textContent=wrong;showHi();
   $("deckinfo").textContent="Words in deck: "+deck.length;
   $("rtkinfo").textContent="RTK kanji in deck: "+rtk.length;
   stats();
@@ -384,6 +428,22 @@ function renderList(){
   $("blist").scrollTop=0;
 }
 $("bd").onchange=renderList;$("bf").onchange=renderList;$("bgo").onclick=renderList;
+function isFS(){return !!(document.fullscreenElement||document.webkitFullscreenElement)}
+function goFS(){
+  try{
+    var el=document.documentElement,f=el.requestFullscreen||el.webkitRequestFullscreen;
+    if(f){var r=f.call(el,{navigationUI:"hide"});if(r&&r.catch)r.catch(function(){})}
+  }catch(e){}
+}
+function toggleFS(){
+  if(isFS()){var x=document.exitFullscreen||document.webkitExitFullscreen;if(x)x.call(document)}else goFS();
+}
+if(!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen))$("fsbtn").style.display="none";
+$("fsbtn").onclick=function(e){e.stopPropagation();fsTried=true;toggleFS()};
+var fsTried=false;
+function firstTap(){if(fsTried)return;fsTried=true;if(!isFS())goFS()}
+document.addEventListener("click",firstTap);
+document.addEventListener("keydown",firstTap);
 load();refresh();hastatus();
 bridge({op:"get"},function(d){
   var b=d&&d.value;
