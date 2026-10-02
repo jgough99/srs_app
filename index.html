@@ -115,6 +115,11 @@ button.s{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid var(--
     <div class="imp">User <input type="text" id="mqUser" autocomplete="off"> Password <input type="password" id="mqPass" autocomplete="off"></div>
     <div class="imp">Topic <input type="text" id="mqTopic" value="kaishi/command"> <button class="s" id="mqGo">Connect</button></div>
     <p id="mqInfo"></p>
+    <div class="imp"><label><input type="checkbox" id="haOn"> Control from Home Assistant (helper switch)</label></div>
+    <div class="imp">Home Assistant <input type="text" id="haUrl" placeholder="http://192.168.1.5:8123"></div>
+    <div class="imp">Access token <input type="password" id="haTok" autocomplete="off"></div>
+    <div class="imp">Helper <input type="text" id="haEnt" value="input_boolean.kaishi_screen"> <button class="s" id="haGo">Connect</button></div>
+    <p id="haInfo"></p>
     <div class="imp">Browse cards
       <select id="bd"><option value="w">Words</option><option value="k">RTK</option></select>
       <select id="bf"><option value="all">All</option><option value="new">New</option><option value="seen">Seen</option><option value="due">Due</option><option value="lapsed">Has lapses</option></select>
@@ -170,7 +175,9 @@ var IN_HA=window.parent!==window&&location.pathname.indexOf("/local/")===0;
 var pend={},pid=0,haOK=false,lastSync="",pt=null;
 window.addEventListener("message",function(e){
   var d=e.data;
-  if(e.origin!==location.origin||!d||d.kaishi!==1||!pend[d.id])return;
+  if(e.origin!==location.origin||!d||d.kaishi!==1)return;
+  if(d.op==="screen"){setSleep(!d.awake);return}
+  if(!pend[d.id])return;
   var f=pend[d.id];delete pend[d.id];f(d);
 });
 function bridge(msg,cb,ms){
@@ -496,11 +503,15 @@ document.addEventListener("click",keepAwake);
 
 /* black screen (OLED saving) and MQTT over WebSockets */
 var asleep=false,idleT=null,mq={ws:null,up:false,ping:null,retry:null,closing:false};
+function reportScreen(){
+  if(IN_HA)try{window.parent.postMessage({kaishi:1,op:"screenstate",awake:!asleep},location.origin)}catch(e){}
+  haReport();
+}
 function setSleep(v){
   if(asleep===v)return;
   asleep=v;$("blk").style.display=v?"block":"none";
   if(v){try{speechSynthesis.cancel()}catch(e){}}
-  mqState();bump();
+  mqState();reportScreen();bump();
 }
 function bump(){
   clearTimeout(idleT);
@@ -546,11 +557,13 @@ function mqConnect(){
   var buf=[];
   mqInfo("Connecting...");
   ws.onopen=function(){
+    if(mq.ws!==ws)return;
     var flags=2,pay=utf("kaishi-"+Math.random().toString(16).slice(2,8));
     if(user){flags|=128;pay=pay.concat(utf(user));if(pass){flags|=64;pay=pay.concat(utf(pass))}}
     ws.send(pkt(0x10,utf("MQTT").concat([4,flags,0,60],pay)));
   };
   ws.onmessage=function(e){
+    if(mq.ws!==ws)return;
     buf=buf.concat(Array.from(new Uint8Array(e.data)));
     while(buf.length>=2){
       var i=1,len=0,mul=1,b;
@@ -573,21 +586,87 @@ function mqConnect(){
     }
   };
   ws.onclose=function(){
+    if(mq.ws!==ws)return;
     mq.up=false;clearInterval(mq.ping);
     if(!mq.closing&&$("mqOn").checked){mqInfo("Disconnected. Retrying...");mq.retry=setTimeout(mqConnect,5000)}
   };
-  ws.onerror=function(){if(!mq.up)mqInfo("Couldn't reach the broker. Check the address, port and that WebSockets are enabled.")};
+  ws.onerror=function(){if(mq.ws===ws&&!mq.up)mqInfo("Couldn't reach the broker. Check the address, port and that WebSockets are enabled.")};
+}
+/* direct Home Assistant connection (WebSocket + access token) for a helper switch */
+var ha={ws:null,up:false,ping:null,retry:null,closing:false,id:10};
+function haInfo(t){$("haInfo").textContent=t}
+function haClose(){
+  ha.closing=true;clearInterval(ha.ping);clearTimeout(ha.retry);clearTimeout(ha.tmo);ha.up=false;
+  if(ha.ws){try{ha.ws.close()}catch(e){}ha.ws=null}
+}
+function haReport(){
+  if(!ha.up||!ha.ws)return;
+  try{ha.ws.send(JSON.stringify({id:++ha.id,type:"call_service",domain:"input_boolean",service:asleep?"turn_off":"turn_on",service_data:{entity_id:$("haEnt").value.trim()}}))}catch(e){}
+}
+function haProbe(origin,cb){
+  var done=false;
+  function fin(v){if(!done){done=true;clearTimeout(t);cb(v)}}
+  var t=setTimeout(function(){fin(false)},4000);
+  try{fetch(origin+"/manifest.json",{mode:"no-cors",cache:"no-store"}).then(function(){fin(true)}).catch(function(){fin(false)})}catch(e){fin(false)}
+}
+function haConnect(){
+  haClose();
+  if(!$("haOn").checked){haInfo("");return}
+  var raw=$("haUrl").value.trim(),tok=$("haTok").value.trim(),ent=$("haEnt").value.trim();
+  if(!raw||!tok||!ent){haInfo("Enter the Home Assistant address, an access token and the helper name.");return}
+  if(!/^https?:\/\//i.test(raw))raw="http://"+raw;
+  var url,origin;
+  try{origin=new URL(raw).origin;url=origin.replace(/^http/i,"ws")+"/api/websocket"}catch(e){haInfo("That address isn't valid. Use something like http://192.168.1.5:8123");return}
+  var ws;
+  try{ws=new WebSocket(url)}catch(e){haInfo("The browser blocked that address. A page on https can't open a plain ws:// connection, so open this page from your Home Assistant address instead (or use an https Home Assistant address).");return}
+  var opened=false,authed=false;
+  ha.ws=ws;ha.closing=false;haInfo("Connecting to "+url+" ...");
+  ha.tmo=setTimeout(function(){if(ha.ws===ws&&!opened){try{ws.close()}catch(x){}}},8000);
+  ws.onopen=function(){if(ha.ws===ws){opened=true;clearTimeout(ha.tmo)}};
+  ws.onmessage=function(e){
+    if(ha.ws!==ws)return;
+    var m;try{m=JSON.parse(e.data)}catch(x){return}
+    if(m.type==="auth_required")ws.send(JSON.stringify({type:"auth",access_token:tok}));
+    else if(m.type==="auth_invalid"){ha.closing=true;haInfo("Home Assistant rejected the access token. Create a new long-lived token and paste it in.")}
+    else if(m.type==="auth_ok"){
+      authed=true;ha.up=true;ha.tries=0;
+      ws.send(JSON.stringify({id:1,type:"subscribe_trigger",trigger:{platform:"state",entity_id:ent}}));
+      ha.ping=setInterval(function(){try{ws.send(JSON.stringify({id:++ha.id,type:"ping"}))}catch(x){}},30000);
+      haInfo("Connected. Watching "+ent);haReport();
+    }else if(m.type==="event"&&m.event&&m.event.variables&&m.event.variables.trigger){
+      var ns=m.event.variables.trigger.to_state;
+      if(ns&&(ns.state==="on"||ns.state==="off"))setSleep(ns.state==="off");
+    }else if(m.type==="result"&&m.success===false&&m.id===1){haInfo("Connected, but couldn't watch that helper: "+((m.error&&m.error.message)||"error"))}
+  };
+  ws.onclose=function(ev){
+    if(ha.ws!==ws)return;
+    ha.up=false;ha.ws=null;clearInterval(ha.ping);clearTimeout(ha.tmo);
+    if(ha.closing||!$("haOn").checked)return;
+    var wait=Math.min(60,5*Math.pow(2,ha.tries||0));ha.tries=(ha.tries||0)+1;
+    var tail=" Retrying in "+wait+"s.";
+    if(opened){ha.retry=setTimeout(haConnect,wait*1000);haInfo((authed?"Connection lost.":"Connected, but Home Assistant closed the connection before login (code "+ev.code+").")+tail);return}
+    haInfo("Couldn't connect. Checking whether "+origin+" is reachable ...");
+    haProbe(origin,function(ok){
+      if(ha.ws!==null||ha.closing)return;
+      ha.retry=setTimeout(haConnect,wait*1000);
+      haInfo((ok?origin+" answers, but the WebSocket connection failed. A reverse proxy, firewall or the page's security settings may be blocking WebSockets.":
+        "Can't reach "+origin+" from this device. Check the IP address and port, that the tablet is on the same Wi-Fi as Home Assistant, and that no VPN or guest network is in the way.")+tail);
+    });
+  };
 }
 (function(){
   var s={};try{s=JSON.parse(localStorage.getItem("dev"))||{}}catch(e){}
+  $("haOn").checked=!!s.haOn;$("haUrl").value=s.haUrl||(location.pathname.indexOf("/local/")===0?location.origin:"");$("haTok").value=s.haTok||"";$("haEnt").value=s.haEnt||"input_boolean.kaishi_screen";
   $("awakeOn").checked=s.awake!==false;$("idleMin").value=s.idle||0;$("mqOn").checked=!!s.on;$("mqUrl").value=s.url||"";
   $("mqUser").value=s.user||"";$("mqPass").value=s.pass||"";$("mqTopic").value=s.topic||"kaishi/command";
-  function sv(){try{localStorage.setItem("dev",JSON.stringify({awake:$("awakeOn").checked,idle:+$("idleMin").value||0,on:$("mqOn").checked,url:$("mqUrl").value.trim(),user:$("mqUser").value,pass:$("mqPass").value,topic:$("mqTopic").value.trim()}))}catch(e){}}
+  function sv(){try{localStorage.setItem("dev",JSON.stringify({haOn:$("haOn").checked,haUrl:$("haUrl").value.trim(),haTok:$("haTok").value.trim(),haEnt:$("haEnt").value.trim(),awake:$("awakeOn").checked,idle:+$("idleMin").value||0,on:$("mqOn").checked,url:$("mqUrl").value.trim(),user:$("mqUser").value,pass:$("mqPass").value,topic:$("mqTopic").value.trim()}))}catch(e){}}
   $("idleMin").onchange=function(){sv();bump()};
   $("awakeOn").onchange=function(){sv();keepAwake()};
+  ["haOn","haUrl","haTok","haEnt"].forEach(function(id){$(id).onchange=function(){sv();haConnect()}});
+  $("haGo").onclick=function(){$("haOn").checked=true;sv();haConnect()};
   ["mqOn","mqUrl","mqUser","mqPass","mqTopic"].forEach(function(id){$(id).onchange=function(){sv();mqConnect()}});
   $("mqGo").onclick=function(){sv();$("mqOn").checked=true;sv();mqConnect()};
-  bump();mqConnect();keepAwake();
+  bump();mqConnect();haConnect();keepAwake();
 })();
 (function(){
   var s={};try{s=JSON.parse(localStorage.getItem("wp"))||{}}catch(e){}
@@ -607,6 +686,7 @@ bridge({op:"get"},function(d){
   }
   hastatus();
   next();
+  reportScreen();
 },1500);
 </script>
 </body>
